@@ -5,7 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import os
 
-TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+TOKEN = os.environ.get('7810289514:AAHjj-SRLR-NPFjij7isO5ffaIi5bhk567s')
 BASE_IMAGE_PATH = "path/to/your/image.jpg"
 FONT_PATH = "path/to/your/font.ttf"
 FONT_SIZE = 40

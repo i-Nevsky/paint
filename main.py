@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Инициализация Flask и Telegram Bot
 app = Flask(__name__)
-TOKEN = os.environ.get('7810289514:AAHjj-SRLR-NPFjij7isO5ffaIi5bhk567s')
+TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 if not TOKEN:
     raise ValueError("Установи переменную окружения TELEGRAM_BOT_TOKEN")
 bot = Bot(TOKEN)

@@ -60,7 +60,9 @@ dispatcher.add_handler(CommandHandler("overlay", overlay))
 # Эндпоинт для приёма обновлений от Telegram через вебхук
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    update = Update.de_json(request.get_json(force=True), bot)
+    data = request.get_json(force=True)
+    logging.info(f"Получен апдейт: {data}")
+    update = Update.de_json(data, bot)
     dispatcher.process_update(update)
     return "ok", 200
 

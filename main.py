@@ -1,51 +1,69 @@
 import logging
-from telegram import Update, InputFile
-from telegram.ext import Updater, CommandHandler, CallbackContext
-from PIL import Image, ImageDraw, ImageFont
-import io
 import os
+import io
+from flask import Flask, request
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler
+from PIL import Image, ImageDraw, ImageFont
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+
+# Инициализация Flask и Telegram Bot
+app = Flask(__name__)
 TOKEN = os.environ.get('7810289514:AAHjj-SRLR-NPFjij7isO5ffaIi5bhk567s')
-BASE_IMAGE_PATH = "path/to/your/image.jpg"
-FONT_PATH = "path/to/your/font.ttf"
+if not TOKEN:
+    raise ValueError("Установи переменную окружения TELEGRAM_BOT_TOKEN")
+bot = Bot(TOKEN)
+dispatcher = Dispatcher(bot, None, workers=0)
+
+# Путь к базовой картинке и файлу шрифта
+BASE_IMAGE_PATH = "static/base_image.jpg"  # размести картинку в папке static
+FONT_PATH = "static/font.ttf"              # размести шрифт в папке static
 FONT_SIZE = 40
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Привет! Отправь команду /overlay <текст> для наложения текста на картинку.")
+def start(update, context):
+    update.message.reply_text("Привет! Используй команду /overlay <текст> для наложения текста на картинку.")
 
-def overlay(update: Update, context: CallbackContext):
+def overlay(update, context):
     text = ' '.join(context.args)
     if not text:
         update.message.reply_text("Укажи текст после команды, например: /overlay Привет мир!")
         return
-
     try:
+        # Открываем картинку и подготавливаем объект для рисования
         image = Image.open(BASE_IMAGE_PATH)
         draw = ImageDraw.Draw(image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
-
+        
+        # Вычисляем позицию для центрирования текста
         width, height = image.size
         text_width, text_height = draw.textsize(text, font=font)
         position = ((width - text_width) / 2, (height - text_height) / 2)
-
+        
+        # Накладываем текст на изображение
         draw.text(position, text, font=font, fill="white")
-
+        
+        # Сохраняем изображение в буфер
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='JPEG')
         img_byte_arr.seek(0)
-
+        
         update.message.reply_photo(photo=img_byte_arr)
     except Exception as e:
-        update.message.reply_text(f"Ошибка: {e}")
+        update.message.reply_text(f"Ошибка при обработке изображения: {e}")
 
-def main():
-    updater = Updater(TOKEN)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("overlay", overlay))
+# Регистрируем обработчики команд
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(CommandHandler("overlay", overlay))
 
-    updater.start_polling()
-    updater.idle()
+# Эндпоинт для приёма обновлений от Telegram через вебхук
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return "ok", 200
 
 if __name__ == '__main__':
-    main()
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

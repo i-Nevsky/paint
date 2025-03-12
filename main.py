@@ -24,7 +24,7 @@ bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
 # Пути к файлам
-BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.jpg")
+BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 FONT_SIZE = 40
 

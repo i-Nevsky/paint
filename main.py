@@ -42,7 +42,7 @@ GET_DATE_TIME = 1
 # Обработчик команды /start: добавляем имя пользователя в приветствие
 def start(update, context):
     user_first_name = update.message.from_user.first_name
-    update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь текст с датой и временем.")
+    update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь свой текст.")
     return GET_DATE_TIME
 
 # Обработчик получения текста и наложения его на изображение

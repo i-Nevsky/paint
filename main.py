@@ -102,7 +102,7 @@ def get_photo(update, context):
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
             # 3) Создаём маску для обрезки по кругу
-            mask = Image.new("L", (circle_diameter, circle_diameter), 10)
+            mask = Image.new("L", (circle_diameter, circle_diameter), 100)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
             
@@ -111,8 +111,8 @@ def get_photo(update, context):
             
             # 5) Задаём координаты для круга (к примеру, справа сверху)
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 500  # отступ 20 пикселей от правого края
-            y_pos = 500                              # отступ 20 пикселей от верхнего края
+            x_pos = base_w - circle_diameter - 300  # отступ 20 пикселей от правого края
+            y_pos = 300                              # отступ 20 пикселей от верхнего края
             
             # 6) Накладываем круговое фото на финальное изображение
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)

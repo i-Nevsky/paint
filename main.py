@@ -15,18 +15,17 @@ from PIL import Image, ImageDraw, ImageFont
 # Вывод текущей рабочей директории для отладки
 print("Current working directory:", os.getcwd())
 
-# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация Flask и Telegram Bot
 app = Flask(__name__)
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 if not TOKEN:
     raise ValueError("Установи переменную окружения TELEGRAM_BOT_TOKEN")
+
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
-# Пути к файлам и настройки для изображения
+# Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.jpg")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 FONT_SIZE = 40
@@ -37,31 +36,35 @@ print("Файл изображения существует?", os.path.exists(BA
 print("Путь к шрифту:", FONT_PATH)
 print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
-# Константы для состояний диалога
 GET_DATE_TIME = 1
 
-# Обработчик команды /start, запускающий диалог
 def start(update, context):
-    update.message.reply_text("Привет! Пожалуйста, отправь текст с датой и временем.")
+    update.message.reply_text("Привет! Пожалуйста, отправь пожалуйста свой текст.")
     return GET_DATE_TIME
 
-# Обработчик получения текста от пользователя и наложения его на изображение
 def get_date_time(update, context):
     text = update.message.text
     try:
-        # Загружаем базовое изображение
         image = Image.open(BASE_IMAGE_PATH)
         draw = ImageDraw.Draw(image)
-        # Загружаем шрифт
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
-        # Вычисляем позицию для центрирования текста
-        width, height = image.size
-        text_width, text_height = draw.textsize(text, font=font)
-        position = ((width - text_width) / 2, (height - text_height) / 2)
+        # Заменяем слово "привет" на имя пользователя (если встречается)
+        user_first_name = update.message.from_user.first_name
+        text = text.replace("привет", user_first_name)
+        
+        # Разбиваем текст на две строки (при наличии хотя бы двух слов)
+        parts = text.split(maxsplit=1)
+        if len(parts) == 2:
+            final_text = parts[0] + "\n" + parts[1]
+        else:
+            final_text = text
+        
+        # Располагаем текст в левом верхнем углу (20, 20)
+        position = (20, 20)
         
         # Накладываем текст на изображение
-        draw.text(position, text, font=font, fill="white")
+        draw.text(position, final_text, font=font, fill="white")
         
         # Сохраняем изображение в буфер
         img_byte_arr = io.BytesIO()
@@ -77,7 +80,6 @@ def cancel(update, context):
     update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
-# ConversationHandler для /start
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
@@ -88,7 +90,6 @@ conv_handler = ConversationHandler(
 
 dispatcher.add_handler(conv_handler)
 
-# Эндпоинт для приёма обновлений от Telegram через вебхук
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json(force=True)
@@ -97,7 +98,6 @@ def webhook():
     dispatcher.process_update(update)
     return "ok", 200
 
-# Обработчик для корневого URL (для проверки работы сервиса)
 @app.route('/')
 def index():
     return "Сервис Telegram бота работает"

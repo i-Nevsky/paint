@@ -26,7 +26,7 @@ dispatcher = Dispatcher(bot, None, workers=0)
 # Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-FONT_SIZE = 40
+FONT_SIZE = 75
 
 print("Путь к изображению:", BASE_IMAGE_PATH)
 print("Файл изображения существует?", os.path.exists(BASE_IMAGE_PATH))
@@ -63,7 +63,7 @@ def get_text(update, context):
         
         # Координаты для текста (примерно «по центру» чёрного прямоугольника слева)
         # Подкорректируй при необходимости
-        text_position = (80, 210)
+        text_position = (40, 540)
         
         # Рисуем текст белым цветом
         draw.text(text_position, final_text, font=font, fill="white")
@@ -99,7 +99,7 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             # Выбираем диаметр круга (например, 230 px)
-            circle_diameter = 230
+            circle_diameter = 950
             
             # Масштабируем фото пользователя под наш круг
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
@@ -117,7 +117,7 @@ def get_photo(update, context):
             
             # Координаты для круга (примерно в районе красного круга справа)
             # Подкорректируй при необходимости
-            x_pos = base_w - circle_diameter - 150
+            x_pos = base_w - circle_diameter - 350
             y_pos = 150
             
             # Накладываем круговое фото на финальное изображение

@@ -12,6 +12,10 @@ from telegram.ext import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
+print("Current working directory:", os.getcwd())
+
+# Далее остальной код...
+
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 

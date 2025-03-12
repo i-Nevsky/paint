@@ -24,7 +24,7 @@ bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
 # Пути к файлам
-BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
+BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.jpg")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 FONT_SIZE = 40
 
@@ -52,11 +52,11 @@ def get_text(update, context):
         draw = ImageDraw.Draw(base_image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
-        # Заменяем слово "привет" на имя пользователя (если встречается)
+        # Заменяем слово "привет" на имя пользователя, если встречается
         user_first_name = update.message.from_user.first_name
         text = text.replace("привет", user_first_name)
         
-        # Разбиваем текст на две строки (при наличии хотя бы двух слов)
+        # Разбиваем текст на две строки (если возможно)
         parts = text.split(maxsplit=1)
         if len(parts) == 2:
             final_text = parts[0] + "\n" + parts[1]
@@ -77,7 +77,7 @@ def get_text(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# Обработчик получения фото от пользователя и наложения его на изображение с текстом
+# Обработчик получения фото и наложения его на изображение с текстом
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -94,30 +94,39 @@ def get_photo(update, context):
                 update.message.reply_text("Изображение с текстом не найдено.")
                 return ConversationHandler.END
             
-            # Приводим базовое изображение к режиму RGBA для корректного наложения
+            # Приводим изображение к режиму RGBA для корректного наложения
             final_image = final_image.convert("RGBA")
             
-            # Задаём позицию для наложения фото (например, (100, 100))
-            overlay_position = (100, 100)
+            # Рассчитываем позицию для наложения фото справа: отступ 20 пикселей от правого и верхнего краёв
+            base_width, base_height = final_image.size
+            overlay_width, overlay_height = user_photo.size
+            overlay_position = (base_width - overlay_width - 20, 20)
             
-            # Накладываем пользовательское фото (с учетом прозрачности, если есть)
+            # Накладываем фото с учетом прозрачности
             final_image.paste(user_photo, overlay_position, user_photo)
             
-            # Преобразуем итоговое изображение в RGB (для JPEG)
+            # Преобразуем итоговое изображение в RGB (для сохранения в JPEG)
             final_image = final_image.convert("RGB")
             out_stream = io.BytesIO()
             final_image.save(out_stream, format="JPEG")
             out_stream.seek(0)
             
             update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с наложенным фото!")
+            
+            # Пытаемся удалить исходное сообщение с фото у пользователя
+            try:
+                bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+            except Exception as del_err:
+                logging.error(f"Ошибка при удалении сообщения: {del_err}")
+            
         else:
-            update.message.reply_text("Пожалуйста, отправьте фото.")
+            update.message.reply_text("Пожалуйста, отправьте изображение.")
             return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
     return ConversationHandler.END
 
-# Обработчик команды /skip – пользователь отказывается от наложения фото
+# Обработчик команды /skip – если пользователь отказывается от наложения фото
 def skip_photo(update, context):
     final_image = context.user_data.get("final_image")
     if final_image:

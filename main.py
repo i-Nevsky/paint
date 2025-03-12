@@ -37,102 +37,112 @@ print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 STATE_TEXT = 1
 STATE_PHOTO = 2
 
-# Обработчик команды /start – запрашивает текст
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь свой текст.")
     return STATE_TEXT
 
-# Обработчик получения текста и нанесения его на базовое изображение
 def get_text(update, context):
     text = update.message.text
     try:
-        # Открываем базовое изображение
-        base_image = Image.open(BASE_IMAGE_PATH)
+        # Открываем базовое изображение (PNG)
+        base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
-        # Заменяем слово "привет" на имя пользователя, если встречается
+        # Заменяем слово "привет" на имя пользователя (если есть)
         user_first_name = update.message.from_user.first_name
         text = text.replace("привет", user_first_name)
         
-        # Разбиваем текст на две строки (если возможно)
+        # Разбиваем текст на две строки, если возможно
         parts = text.split(maxsplit=1)
         if len(parts) == 2:
             final_text = parts[0] + "\n" + parts[1]
         else:
             final_text = text
         
-        # Наносим текст в левом верхнем углу (координаты (20,20))
+        # Наносим текст в левом верхнем углу (20,20)
         text_position = (20, 20)
         draw.text(text_position, final_text, font=font, fill="white")
         
-        # Сохраняем полученное изображение в контексте для дальнейшего использования
+        # Сохраняем полученное изображение в user_data, чтобы потом наложить фото
         context.user_data["final_image"] = base_image.copy()
         
-        # Просим пользователя отправить фото для наложения или команду /skip
-        update.message.reply_text("Твой текст нанесён. Теперь отправь своё фото, которое нужно наложить на это изображение, либо введи /skip, чтобы использовать только изображение с текстом.")
+        update.message.reply_text(
+            "Твой текст нанесён. Отправь фото, чтобы вставить его в круг справа, "
+            "или введи /skip, чтобы пропустить."
+        )
         return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# Обработчик получения фото и наложения его на изображение с текстом
 def get_photo(update, context):
     try:
         if update.message.photo:
-            # Получаем фото (наиболее качественную версию)
+            # Скачиваем фото, которое прислал пользователь
             photo_file = update.message.photo[-1].get_file()
             photo_stream = io.BytesIO()
             photo_file.download(out=photo_stream)
             photo_stream.seek(0)
             user_photo = Image.open(photo_stream).convert("RGBA")
             
-            # Берем ранее сохранённое изображение с текстом
+            # Берём ранее сохранённое изображение с текстом
             final_image = context.user_data.get("final_image")
             if not final_image:
                 update.message.reply_text("Изображение с текстом не найдено.")
                 return ConversationHandler.END
             
-            # Приводим изображение к режиму RGBA для корректного наложения
             final_image = final_image.convert("RGBA")
             
-            # Рассчитываем позицию для наложения фото справа: отступ 20 пикселей от правого и верхнего краёв
-            base_width, base_height = final_image.size
-            overlay_width, overlay_height = user_photo.size
-            overlay_position = (base_width - overlay_width - 20, 20)
+            # 1) Определяем желаемый диаметр круга (например, 200 пикселей)
+            circle_diameter = 200
             
-            # Накладываем фото с учетом прозрачности
-            final_image.paste(user_photo, overlay_position, user_photo)
+            # 2) Масштабируем пользовательское фото до нужных размеров
+            user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
-            # Преобразуем итоговое изображение в RGB (для сохранения в JPEG)
-            final_image = final_image.convert("RGB")
+            # 3) Создаём маску для обрезки по кругу
+            mask = Image.new("L", (circle_diameter, circle_diameter), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
+            
+            # 4) Применяем маску к фото (делаем края прозрачными)
+            user_photo.putalpha(mask)
+            
+            # 5) Задаём координаты для круга (к примеру, справа сверху)
+            base_w, base_h = final_image.size
+            x_pos = base_w - circle_diameter - 20  # отступ 20 пикселей от правого края
+            y_pos = 20                              # отступ 20 пикселей от верхнего края
+            
+            # 6) Накладываем круговое фото на финальное изображение
+            final_image.paste(user_photo, (x_pos, y_pos), user_photo)
+            
+            # Преобразуем в RGB и отправляем пользователю
+            final_image_rgb = final_image.convert("RGB")
             out_stream = io.BytesIO()
-            final_image.save(out_stream, format="JPEG")
+            final_image_rgb.save(out_stream, format="JPEG")
             out_stream.seek(0)
             
-            update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с наложенным фото!")
+            update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с твоим фото в круге!")
             
-            # Пытаемся удалить исходное сообщение с фото у пользователя
+            # Пытаемся удалить сообщение с исходным фото (если бот имеет права)
             try:
                 bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
             except Exception as del_err:
                 logging.error(f"Ошибка при удалении сообщения: {del_err}")
-            
         else:
-            update.message.reply_text("Пожалуйста, отправьте изображение.")
+            update.message.reply_text("Пожалуйста, отправьте фото.")
             return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
     return ConversationHandler.END
 
-# Обработчик команды /skip – если пользователь отказывается от наложения фото
 def skip_photo(update, context):
     final_image = context.user_data.get("final_image")
     if final_image:
-        final_image = final_image.convert("RGB")
+        final_image_rgb = final_image.convert("RGB")
         out_stream = io.BytesIO()
-        final_image.save(out_stream, format="JPEG")
+        final_image_rgb.save(out_stream, format="JPEG")
         out_stream.seek(0)
         update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение без дополнительного фото!")
     else:

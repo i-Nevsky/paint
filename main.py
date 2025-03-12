@@ -33,102 +33,120 @@ print("Файл изображения существует?", os.path.exists(BA
 print("Путь к шрифту:", FONT_PATH)
 print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
-# Константы состояний для диалогов
-GET_DATE_TIME = 1
-GET_OVERLAY_IMAGE = 2
+# Состояния диалога
+STATE_TEXT = 1
+STATE_PHOTO = 2
 
-# Диалог для наложения текста на базовую картинку (команда /start)
+# Обработчик команды /start – запрашивает текст
 def start(update, context):
     user_first_name = update.message.from_user.first_name
-    update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь текст с датой и временем.")
-    return GET_DATE_TIME
+    update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь свой текст.")
+    return STATE_TEXT
 
-def get_date_time(update, context):
+# Обработчик получения текста и нанесения его на базовое изображение
+def get_text(update, context):
     text = update.message.text
     try:
-        image = Image.open(BASE_IMAGE_PATH)
-        draw = ImageDraw.Draw(image)
+        # Открываем базовое изображение
+        base_image = Image.open(BASE_IMAGE_PATH)
+        draw = ImageDraw.Draw(base_image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
+        
+        # Заменяем слово "привет" на имя пользователя (если встречается)
         user_first_name = update.message.from_user.first_name
-        # Заменяем слово "привет" на имя пользователя, если оно встречается
         text = text.replace("привет", user_first_name)
-        # Разбиваем текст на две строки (если возможно)
+        
+        # Разбиваем текст на две строки (при наличии хотя бы двух слов)
         parts = text.split(maxsplit=1)
         if len(parts) == 2:
             final_text = parts[0] + "\n" + parts[1]
         else:
             final_text = text
-        # Фиксированная позиция в левом верхнем углу (20,20)
-        position = (20, 20)
-        draw.text(position, final_text, font=font, fill="white")
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format="JPEG")
-        img_byte_arr.seek(0)
-        update.message.reply_photo(photo=img_byte_arr, caption="Вот изображение с твоим текстом!")
+        
+        # Наносим текст в левом верхнем углу (координаты (20,20))
+        text_position = (20, 20)
+        draw.text(text_position, final_text, font=font, fill="white")
+        
+        # Сохраняем полученное изображение в контексте для дальнейшего использования
+        context.user_data["final_image"] = base_image.copy()
+        
+        # Просим пользователя отправить фото для наложения или команду /skip
+        update.message.reply_text("Твой текст нанесён. Теперь отправь своё фото, которое нужно наложить на это изображение, либо введи /skip, чтобы использовать только изображение с текстом.")
+        return STATE_PHOTO
+    except Exception as e:
+        update.message.reply_text(f"Ошибка при обработке изображения: {e}")
+        return ConversationHandler.END
+
+# Обработчик получения фото от пользователя и наложения его на изображение с текстом
+def get_photo(update, context):
+    try:
+        if update.message.photo:
+            # Получаем фото (наиболее качественную версию)
+            photo_file = update.message.photo[-1].get_file()
+            photo_stream = io.BytesIO()
+            photo_file.download(out=photo_stream)
+            photo_stream.seek(0)
+            user_photo = Image.open(photo_stream).convert("RGBA")
+            
+            # Берем ранее сохранённое изображение с текстом
+            final_image = context.user_data.get("final_image")
+            if not final_image:
+                update.message.reply_text("Изображение с текстом не найдено.")
+                return ConversationHandler.END
+            
+            # Приводим базовое изображение к режиму RGBA для корректного наложения
+            final_image = final_image.convert("RGBA")
+            
+            # Задаём позицию для наложения фото (например, (100, 100))
+            overlay_position = (100, 100)
+            
+            # Накладываем пользовательское фото (с учетом прозрачности, если есть)
+            final_image.paste(user_photo, overlay_position, user_photo)
+            
+            # Преобразуем итоговое изображение в RGB (для JPEG)
+            final_image = final_image.convert("RGB")
+            out_stream = io.BytesIO()
+            final_image.save(out_stream, format="JPEG")
+            out_stream.seek(0)
+            
+            update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с наложенным фото!")
+        else:
+            update.message.reply_text("Пожалуйста, отправьте фото.")
+            return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
     return ConversationHandler.END
 
-# Диалог для наложения изображения, отправленного пользователем, на базовую картинку (команда /overlayimg)
-def overlay_image_start(update, context):
-    update.message.reply_text("Пожалуйста, отправь изображение, которое нужно наложить на базовую картинку.")
-    return GET_OVERLAY_IMAGE
-
-def get_overlay_image(update, context):
-    try:
-        if update.message.photo:
-            # Берем наиболее качественную версию изображения
-            photo_file = update.message.photo[-1].get_file()
-            overlay_stream = io.BytesIO()
-            photo_file.download(out=overlay_stream)
-            overlay_stream.seek(0)
-            overlay_img = Image.open(overlay_stream).convert("RGBA")
-            
-            # Открываем базовую картинку и переводим её в режим RGBA для работы с прозрачностью
-            base_img = Image.open(BASE_IMAGE_PATH).convert("RGBA")
-            
-            # Задаем позицию для наложения изображения (например, (100,100))
-            position = (100, 100)
-            
-            # Накладываем изображение с использованием альфа-канала (если есть)
-            base_img.paste(overlay_img, position, overlay_img)
-            
-            # Преобразуем итоговое изображение в RGB для сохранения в JPEG
-            final_image = base_img.convert("RGB")
-            out_stream = io.BytesIO()
-            final_image.save(out_stream, format="JPEG")
-            out_stream.seek(0)
-            update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение!")
-        else:
-            update.message.reply_text("Пожалуйста, отправьте изображение.")
-            return GET_OVERLAY_IMAGE
-    except Exception as e:
-        update.message.reply_text(f"Ошибка при обработке изображения: {e}")
+# Обработчик команды /skip – пользователь отказывается от наложения фото
+def skip_photo(update, context):
+    final_image = context.user_data.get("final_image")
+    if final_image:
+        final_image = final_image.convert("RGB")
+        out_stream = io.BytesIO()
+        final_image.save(out_stream, format="JPEG")
+        out_stream.seek(0)
+        update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение без дополнительного фото!")
+    else:
+        update.message.reply_text("Изображение не найдено.")
     return ConversationHandler.END
 
 def cancel(update, context):
     update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
-# ConversationHandler для команды /start (наложение текста)
-conv_handler_text = ConversationHandler(
+conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
-        GET_DATE_TIME: [MessageHandler(Filters.text & ~Filters.command, get_date_time)]
+        STATE_TEXT: [MessageHandler(Filters.text & ~Filters.command, get_text)],
+        STATE_PHOTO: [
+            MessageHandler(Filters.photo, get_photo),
+            CommandHandler('skip', skip_photo)
+        ]
     },
     fallbacks=[CommandHandler('cancel', cancel)]
 )
-dispatcher.add_handler(conv_handler_text)
 
-# ConversationHandler для команды /overlayimg (наложение изображения)
-conv_handler_image = ConversationHandler(
-    entry_points=[CommandHandler('overlayimg', overlay_image_start)],
-    states={
-        GET_OVERLAY_IMAGE: [MessageHandler(Filters.photo, get_overlay_image)]
-    },
-    fallbacks=[CommandHandler('cancel', cancel)]
-)
-dispatcher.add_handler(conv_handler_image)
+dispatcher.add_handler(conv_handler)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():

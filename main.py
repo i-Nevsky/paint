@@ -99,7 +99,7 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             # Выбираем диаметр круга (например, 230 px)
-            circle_diameter = 950
+            circle_diameter = 650
             
             # Масштабируем фото пользователя под наш круг
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
@@ -117,8 +117,8 @@ def get_photo(update, context):
             
             # Координаты для круга (примерно в районе красного круга справа)
             # Подкорректируй при необходимости
-            x_pos = base_w - circle_diameter - 350
-            y_pos = 150
+            x_pos = base_w - circle_diameter - 150
+            y_pos = 50
             
             # Накладываем круговое фото на финальное изображение
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)

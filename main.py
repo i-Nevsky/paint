@@ -28,6 +28,7 @@ GET_DATE_TIME = 1
 
 # Обработчик команды /start, запускающий диалог
 def start(update, context):
+    logging.info("Получена команда /start")
     update.message.reply_text("Привет! Пожалуйста, отправь текст с датой и временем.")
     return GET_DATE_TIME
 

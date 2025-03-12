@@ -29,7 +29,7 @@ dispatcher = Dispatcher(bot, None, workers=0)
 
 # Пути к файлам и настройки для изображения
 BASE_IMAGE_PATH = "static/base_image.jpg"  # размести картинку в папке static
-FONT_PATH = "static/font.ttf"              # размести шрифт в папке static
+FONT_PATH = "static/roboto.ttf"              # размести шрифт в папке static
 FONT_SIZE = 40
 
 # Константы для состояний диалога

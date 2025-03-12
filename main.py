@@ -45,27 +45,30 @@ def start(update, context):
 def get_text(update, context):
     text = update.message.text
     try:
-        # Открываем базовое изображение (PNG)
+        # Открываем базовое изображение (PNG) и переводим в RGBA для прозрачности
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
-        # Заменяем слово "привет" на имя пользователя (если есть)
+        # Заменяем слово "привет" на имя пользователя (если встречается)
         user_first_name = update.message.from_user.first_name
         text = text.replace("привет", user_first_name)
         
-        # Разбиваем текст на две строки, если возможно
+        # Разбиваем текст на две строки (если возможно)
         parts = text.split(maxsplit=1)
         if len(parts) == 2:
             final_text = parts[0] + "\n" + parts[1]
         else:
             final_text = text
         
-        # Наносим текст в левом верхнем углу (20,20)
-        text_position = (20, 20)
+        # Координаты для текста (примерно «по центру» чёрного прямоугольника слева)
+        # Подкорректируй при необходимости
+        text_position = (80, 210)
+        
+        # Рисуем текст белым цветом
         draw.text(text_position, final_text, font=font, fill="white")
         
-        # Сохраняем полученное изображение в user_data, чтобы потом наложить фото
+        # Сохраняем полученное изображение в user_data
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
@@ -95,26 +98,29 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            # 1) Определяем желаемый диаметр круга (например, 200 пикселей)
-            circle_diameter = 200
+            # Выбираем диаметр круга (например, 230 px)
+            circle_diameter = 230
             
-            # 2) Масштабируем пользовательское фото до нужных размеров
+            # Масштабируем фото пользователя под наш круг
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
-            # 3) Создаём маску для обрезки по кругу
-            mask = Image.new("L", (circle_diameter, circle_diameter), 100)
+            # Создаём маску для обрезки по кругу
+            mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
             
-            # 4) Применяем маску к фото (делаем края прозрачными)
+            # Применяем маску к фото (делаем края прозрачными)
             user_photo.putalpha(mask)
             
-            # 5) Задаём координаты для круга (к примеру, справа сверху)
+            # Получаем размеры финального изображения
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 300  # отступ 20 пикселей от правого края
-            y_pos = 300                              # отступ 20 пикселей от верхнего края
             
-            # 6) Накладываем круговое фото на финальное изображение
+            # Координаты для круга (примерно в районе красного круга справа)
+            # Подкорректируй при необходимости
+            x_pos = base_w - circle_diameter - 150
+            y_pos = 150
+            
+            # Накладываем круговое фото на финальное изображение
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             
             # Преобразуем в RGB и отправляем пользователю

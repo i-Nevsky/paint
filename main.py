@@ -36,12 +36,16 @@ print("Файл изображения существует?", os.path.exists(BA
 print("Путь к шрифту:", FONT_PATH)
 print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
+# Константа для состояния диалога
 GET_DATE_TIME = 1
 
+# Обработчик команды /start: добавляем имя пользователя в приветствие
 def start(update, context):
-    update.message.reply_text("Привет! Пожалуйста, отправь пожалуйста свой текст.")
+    user_first_name = update.message.from_user.first_name
+    update.message.reply_text(f"Привет, {user_first_name}! Пожалуйста, отправь текст с датой и временем.")
     return GET_DATE_TIME
 
+# Обработчик получения текста и наложения его на изображение
 def get_date_time(update, context):
     text = update.message.text
     try:
@@ -49,18 +53,18 @@ def get_date_time(update, context):
         draw = ImageDraw.Draw(image)
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
-        # Заменяем слово "привет" на имя пользователя (если встречается)
+        # Если в тексте встречается слово "привет", заменяем его на имя пользователя
         user_first_name = update.message.from_user.first_name
         text = text.replace("привет", user_first_name)
         
-        # Разбиваем текст на две строки (при наличии хотя бы двух слов)
+        # Разбиваем текст на две строки, если возможно (при наличии хотя бы двух слов)
         parts = text.split(maxsplit=1)
         if len(parts) == 2:
             final_text = parts[0] + "\n" + parts[1]
         else:
             final_text = text
         
-        # Располагаем текст в левом верхнем углу (20, 20)
+        # Фиксированная позиция в левом верхнем углу (20,20)
         position = (20, 20)
         
         # Накладываем текст на изображение

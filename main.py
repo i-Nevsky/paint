@@ -12,9 +12,8 @@ from telegram.ext import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
+# Вывод текущей рабочей директории для отладки
 print("Current working directory:", os.getcwd())
-
-# Далее остальной код...
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -28,9 +27,15 @@ bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
 # Пути к файлам и настройки для изображения
-BASE_IMAGE_PATH = "static/base_image.jpg"  # размести картинку в папке static
-FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")             # размести шрифт в папке static
+BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.jpg")
+FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 FONT_SIZE = 40
+
+# Отладочный вывод для проверки наличия файлов
+print("Путь к изображению:", BASE_IMAGE_PATH)
+print("Файл изображения существует?", os.path.exists(BASE_IMAGE_PATH))
+print("Путь к шрифту:", FONT_PATH)
+print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
 # Константы для состояний диалога
 GET_DATE_TIME = 1
@@ -40,13 +45,14 @@ def start(update, context):
     update.message.reply_text("Привет! Пожалуйста, отправь текст с датой и временем.")
     return GET_DATE_TIME
 
-# Обработчик получения текста от пользователя с датой и временем
-# и наложение его на изображение
+# Обработчик получения текста от пользователя и наложения его на изображение
 def get_date_time(update, context):
     text = update.message.text
     try:
+        # Загружаем базовое изображение
         image = Image.open(BASE_IMAGE_PATH)
         draw = ImageDraw.Draw(image)
+        # Загружаем шрифт
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
         # Вычисляем позицию для центрирования текста
@@ -91,7 +97,7 @@ def webhook():
     dispatcher.process_update(update)
     return "ok", 200
 
-# Обработчик для корневого URL
+# Обработчик для корневого URL (для проверки работы сервиса)
 @app.route('/')
 def index():
     return "Сервис Telegram бота работает"

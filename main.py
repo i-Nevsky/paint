@@ -23,37 +23,27 @@ if not TOKEN:
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
+# Пути к файлам и настройки для изображения
+BASE_IMAGE_PATH = "static/base_image.jpg"  # размести картинку в папке static
+FONT_PATH = "static/font.ttf"              # размести шрифт в папке static
+FONT_SIZE = 40
+
 # Константы для состояний диалога
 GET_DATE_TIME = 1
 
 # Обработчик команды /start, запускающий диалог
 def start(update, context):
-    logging.info("Получена команда /start")
     update.message.reply_text("Привет! Пожалуйста, отправь текст с датой и временем.")
     return GET_DATE_TIME
 
-# Обработчик полученного текста с датой и временем
+# Обработчик получения текста от пользователя с датой и временем
+# и наложение его на изображение
 def get_date_time(update, context):
     text = update.message.text
-    # Здесь можно добавить разбор и обработку даты и времени из текста
-    update.message.reply_text(f"Ты отправил: {text}")
-    return ConversationHandler.END
-
-def cancel(update, context):
-    update.message.reply_text("Отмена.")
-    return ConversationHandler.END
-
-# Обработчик команды /overlay для наложения текста на изображение
-def overlay(update, context):
-    text = ' '.join(context.args)
-    if not text:
-        update.message.reply_text("Укажи текст после команды, например: /overlay Привет мир!")
-        return
     try:
-        # Открываем изображение и подготавливаем объект для рисования
-        image = Image.open("static/base_image.jpg")
+        image = Image.open(BASE_IMAGE_PATH)
         draw = ImageDraw.Draw(image)
-        font = ImageFont.truetype("static/font.ttf", 40)
+        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
         # Вычисляем позицию для центрирования текста
         width, height = image.size
@@ -65,12 +55,17 @@ def overlay(update, context):
         
         # Сохраняем изображение в буфер
         img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='JPEG')
+        image.save(img_byte_arr, format="JPEG")
         img_byte_arr.seek(0)
         
-        update.message.reply_photo(photo=img_byte_arr)
+        update.message.reply_photo(photo=img_byte_arr, caption="Вот изображение с твоим текстом!")
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
+    return ConversationHandler.END
+
+def cancel(update, context):
+    update.message.reply_text("Отмена.")
+    return ConversationHandler.END
 
 # ConversationHandler для /start
 conv_handler = ConversationHandler(
@@ -81,9 +76,7 @@ conv_handler = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel)]
 )
 
-# Регистрируем обработчики в диспетчере
 dispatcher.add_handler(conv_handler)
-dispatcher.add_handler(CommandHandler("overlay", overlay))
 
 # Эндпоинт для приёма обновлений от Telegram через вебхук
 @app.route('/webhook', methods=['POST'])
@@ -94,7 +87,7 @@ def webhook():
     dispatcher.process_update(update)
     return "ok", 200
 
-# Обработчик корневого URL для проверки сервиса
+# Обработчик для корневого URL
 @app.route('/')
 def index():
     return "Сервис Telegram бота работает"

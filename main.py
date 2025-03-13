@@ -23,7 +23,7 @@ if not TOKEN:
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
-# Пути к файлам (убедись, что файлы находятся в папке static в корне проекта)
+# Пути к файлам – убедись, что в папке static находятся base_image.png и roboto.ttf
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 
@@ -32,96 +32,84 @@ print("Файл изображения существует?", os.path.exists(BA
 print("Путь к шрифту:", FONT_PATH)
 print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
-# Определяем состояния диалога
-STATE_DATE_TIME = 1
+# Состояния диалога
+STATE_DATE_INPUT = 1
 STATE_EXPERT = 2
 STATE_TOPIC = 3
 STATE_PHOTO = 4
 
-# Начало диалога – первый вопрос
+# 1. Начало диалога: запрос даты и времени ввода вручную
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Пожалуйста, отправь дату и время: (формат 09 марта 13:00 МСК)"
+        f"Привет, {user_first_name}! Введи дату и время (например, 2025-03-14 13:00 МСК):"
     )
-    return STATE_DATE_TIME
+    return STATE_DATE_INPUT
 
-# Обработка первого ответа: дата и время
+# Получение даты и времени
 def get_date_time(update, context):
-    text = update.message.text
-    # Предполагаем, что пользователь вводит хотя бы 3 слова, например: "09 марта 13:00 МСК"
-    parts = text.split()
-    if len(parts) >= 3:
-        # Первые два слова – дата, остальные – время
-        date_line = " ".join(parts[:2])
-        time_line = " ".join(parts[2:])
-        final_dt_text = date_line + "\n" + time_line
-    else:
-        final_dt_text = text  # если пользователь ввёл недостаточно данных
-
-    context.user_data["date_time_text"] = final_dt_text
-    update.message.reply_text("Напишите фамилию и имя эксперта:")
+    date_time_text = update.message.text
+    context.user_data["date_time_text"] = date_time_text
+    update.message.reply_text("Напиши фамилию и имя эксперта:")
     return STATE_EXPERT
 
-# Обработка второго ответа: эксперт
+# 2. Получение фамилии и имени эксперта
 def get_expert(update, context):
     expert = update.message.text
+    logging.info(f"Получено имя эксперта: {expert}")
     context.user_data["expert_text"] = expert
-    update.message.reply_text("Напишите тему эфира:")
+    update.message.reply_text("Напиши тему эфира:")
     return STATE_TOPIC
 
-# Обработка третьего ответа: тема эфира и нанесение всех текстов на изображение
+# 3. Получение темы эфира и нанесение текстов на изображение
 def get_topic(update, context):
     topic = update.message.text
     context.user_data["topic_text"] = topic
     try:
-        # Открываем базовое изображение (PNG) и переводим в RGBA
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
-        
-        # Шрифты: для даты/времени – размер 25; для эксперта и темы – размер 30
-        font_dt = ImageFont.truetype(FONT_PATH, 35)
+        # Шрифты:
+        # Дата/время – размер 45,
+        # ФИО эксперта – размер 70,
+        # Тема эфира – размер 70.
+        font_dt = ImageFont.truetype(FONT_PATH, 45)
         font_expert = ImageFont.truetype(FONT_PATH, 70)
         font_topic = ImageFont.truetype(FONT_PATH, 70)
         
-        # Получаем тексты, сохранённые в user_data
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
         topic_text = context.user_data.get("topic_text", "")
         
-        # Наносим дату и время в верхнем левом углу (например, координаты (20,20))
+        # Наносим тексты:
+        # Дата и время в верхнем левом углу (20,20)
         draw.text((20, 20), dt_text, font=font_dt, fill="white")
-        
-        # Наносим фамилию и имя эксперта – размещаем так, чтобы текст был примерно по центру области слева
+        # Фамилия и имя эксперта – (20,380)
         draw.text((20, 380), expert_text, font=font_expert, fill="white")
+        # Тема эфира – (20,450)
+        draw.text((20, 450), topic_text, font=font_topic, fill="white")
         
-        # Наносим тему эфира под экспертом (например, (20,220))
-        draw.text((20, 420), topic_text, font=font_topic, fill="white")
-        
-        # Сохраняем полученное изображение с нанесёнными текстами в user_data для дальнейшей обработки фото
+        # Сохраняем изображение с нанесёнными текстами
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
-            "Тексты нанесены. Теперь отправьте фото, которое нужно вставить в круг справа, "
-            "или введите /skip, чтобы использовать только изображение с текстами."
+            "Тексты нанесены. Теперь отправь фото, которое нужно вставить в круг справа, "
+            "или введи /skip, чтобы использовать только изображение с текстами."
         )
         return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# Обработка фото: наложение обрезанного по кругу фото на изображение
+# 4. Получение фото: обрезка по кругу и вставка в заданную область
 def get_photo(update, context):
     try:
         if update.message.photo:
-            # Скачиваем фото пользователя (наиболее качественную версию)
             photo_file = update.message.photo[-1].get_file()
             photo_stream = io.BytesIO()
             photo_file.download(out=photo_stream)
             photo_stream.seek(0)
             user_photo = Image.open(photo_stream).convert("RGBA")
             
-            # Получаем ранее сохранённое изображение с текстами
             final_image = context.user_data.get("final_image")
             if not final_image:
                 update.message.reply_text("Изображение с текстами не найдено.")
@@ -129,27 +117,20 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            # Определяем диаметр круга для фото пользователя (например, 230 пикселей)
-            circle_diameter = 350
+            circle_diameter = 430
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
-            # Создаём маску для обрезки фото по кругу
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
             user_photo.putalpha(mask)
             
-            # Рассчитываем позицию для вставки фото в "красный кружочек"
-            # Здесь можно подкорректировать: например, если кружок находится справа, можно задать:
             base_w, base_h = final_image.size
-            # Пример: фото вставляется с отступом 50 пикселей от правого края и 80 от верхнего,
-            # но можно изменить в зависимости от макета.
-            x_pos = base_w - circle_diameter - 50
-            y_pos = 80
+            x_pos = base_w - circle_diameter - 90
+            y_pos = 170
             
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             
-            # Преобразуем итоговое изображение в RGB (для сохранения в JPEG)
             final_image_rgb = final_image.convert("RGB")
             out_stream = io.BytesIO()
             final_image_rgb.save(out_stream, format="JPEG")
@@ -157,13 +138,12 @@ def get_photo(update, context):
             
             update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с наложенным фото!")
             
-            # Пытаемся удалить исходное сообщение с фото (если бот имеет права)
             try:
                 bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
             except Exception as del_err:
                 logging.error(f"Ошибка при удалении сообщения: {del_err}")
         else:
-            update.message.reply_text("Пожалуйста, отправьте изображение.")
+            update.message.reply_text("Пожалуйста, отправь изображение.")
             return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
@@ -188,7 +168,7 @@ def cancel(update, context):
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
-        STATE_DATE_TIME: [MessageHandler(Filters.text & ~Filters.command, get_date_time)],
+        STATE_DATE_INPUT: [MessageHandler(Filters.text & ~Filters.command, get_date_time)],
         STATE_EXPERT: [MessageHandler(Filters.text & ~Filters.command, get_expert)],
         STATE_TOPIC: [MessageHandler(Filters.text & ~Filters.command, get_topic)],
         STATE_PHOTO: [
@@ -216,3 +196,6 @@ def index():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
+# Для некоторых хостингов может потребоваться:
+application = app

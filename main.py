@@ -26,9 +26,7 @@ dispatcher = Dispatcher(bot, None, workers=0)
 # Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-
-# Уменьшаем размер шрифта в 2 раза (было 40)
-FONT_SIZE = 20
+FONT_SIZE = 20  # Уменьшенный шрифт (в 2 раза меньше прежнего)
 
 print("Путь к изображению:", BASE_IMAGE_PATH)
 print("Файл изображения существует?", os.path.exists(BASE_IMAGE_PATH))
@@ -50,7 +48,7 @@ def get_text(update, context):
         # Открываем базовое изображение (PNG) и переводим в RGBA для прозрачности
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
-        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)  # шрифт 20px, без жирности
+        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
         
         # Заменяем слово "привет" на имя пользователя (если встречается)
         user_first_name = update.message.from_user.first_name
@@ -63,13 +61,13 @@ def get_text(update, context):
         else:
             final_text = text
         
-        # Координаты для текста в левом верхнем углу
+        # Координаты для текста: верхний левый угол (20,20)
         text_position = (20, 20)
         
         # Рисуем текст белым цветом
         draw.text(text_position, final_text, font=font, fill="white")
         
-        # Сохраняем полученное изображение в user_data
+        # Сохраняем полученное изображение в user_data для дальнейшего использования
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
@@ -84,12 +82,14 @@ def get_text(update, context):
 def get_photo(update, context):
     try:
         if update.message.photo:
+            # Скачиваем фото, которое прислал пользователь
             photo_file = update.message.photo[-1].get_file()
             photo_stream = io.BytesIO()
             photo_file.download(out=photo_stream)
             photo_stream.seek(0)
             user_photo = Image.open(photo_stream).convert("RGBA")
             
+            # Берём ранее сохранённое изображение с текстом
             final_image = context.user_data.get("final_image")
             if not final_image:
                 update.message.reply_text("Изображение с текстом не найдено.")
@@ -97,20 +97,24 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
+            # Диаметр круга для фото пользователя
             circle_diameter = 230
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
+            # Создаём маску для обрезки по кругу
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
             user_photo.putalpha(mask)
             
+            # Рассчитываем позицию для вставки фото (правый верхний угол, с отступами)
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 150
-            y_pos = 150
+            x_pos = base_w - circle_diameter - 150  # смещение от правого края
+            y_pos = 150  # смещение от верхнего края
             
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             
+            # Преобразуем итоговое изображение в RGB (для сохранения в JPEG)
             final_image_rgb = final_image.convert("RGB")
             out_stream = io.BytesIO()
             final_image_rgb.save(out_stream, format="JPEG")
@@ -118,13 +122,13 @@ def get_photo(update, context):
             
             update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с твоим фото в круге!")
             
-            # Пытаемся удалить сообщение с исходным фото (если бот имеет права)
+            # Пытаемся удалить исходное сообщение с фото (если бот имеет права)
             try:
                 bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
             except Exception as del_err:
                 logging.error(f"Ошибка при удалении сообщения: {del_err}")
         else:
-            update.message.reply_text("Пожалуйста, отправьте фото.")
+            update.message.reply_text("Пожалуйста, отправьте изображение.")
             return STATE_PHOTO
     except Exception as e:
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")

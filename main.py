@@ -97,9 +97,9 @@ def get_topic(update, context):
         # Дата и время в верхнем левом углу (20,20)
         draw.text((20, 20), dt_text, font=font_dt, fill="white")
         # Фамилия и имя эксперта – размещаем, например, в точке (20,150)
-        draw.text((20, 150), expert_text, font=font_expert, fill="white")
+        draw.text((20, 380), expert_text, font=font_expert, fill="white")
         # Тема эфира – под экспертом, в точке (20,220)
-        draw.text((20, 220), topic_text, font=font_topic, fill="white")
+        draw.text((20, 450), topic_text, font=font_topic, fill="white")
         
         # Сохраняем изображение с нанесёнными текстами для дальнейшей обработки фото
         context.user_data["final_image"] = base_image.copy()

@@ -26,7 +26,9 @@ dispatcher = Dispatcher(bot, None, workers=0)
 # Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-FONT_SIZE = 75
+
+# Уменьшаем размер шрифта в 2 раза (было 40)
+FONT_SIZE = 20
 
 print("Путь к изображению:", BASE_IMAGE_PATH)
 print("Файл изображения существует?", os.path.exists(BASE_IMAGE_PATH))
@@ -48,7 +50,7 @@ def get_text(update, context):
         # Открываем базовое изображение (PNG) и переводим в RGBA для прозрачности
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
-        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
+        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)  # шрифт 20px, без жирности
         
         # Заменяем слово "привет" на имя пользователя (если встречается)
         user_first_name = update.message.from_user.first_name
@@ -61,9 +63,8 @@ def get_text(update, context):
         else:
             final_text = text
         
-        # Координаты для текста (примерно «по центру» чёрного прямоугольника слева)
-        # Подкорректируй при необходимости
-        text_position = (40, 540)
+        # Координаты для текста в левом верхнем углу
+        text_position = (20, 20)
         
         # Рисуем текст белым цветом
         draw.text(text_position, final_text, font=font, fill="white")
@@ -83,14 +84,12 @@ def get_text(update, context):
 def get_photo(update, context):
     try:
         if update.message.photo:
-            # Скачиваем фото, которое прислал пользователь
             photo_file = update.message.photo[-1].get_file()
             photo_stream = io.BytesIO()
             photo_file.download(out=photo_stream)
             photo_stream.seek(0)
             user_photo = Image.open(photo_stream).convert("RGBA")
             
-            # Берём ранее сохранённое изображение с текстом
             final_image = context.user_data.get("final_image")
             if not final_image:
                 update.message.reply_text("Изображение с текстом не найдено.")
@@ -98,32 +97,20 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            # Выбираем диаметр круга (например, 230 px)
-            circle_diameter = 650
-            
-            # Масштабируем фото пользователя под наш круг
+            circle_diameter = 230
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
-            # Создаём маску для обрезки по кругу
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
-            
-            # Применяем маску к фото (делаем края прозрачными)
             user_photo.putalpha(mask)
             
-            # Получаем размеры финального изображения
             base_w, base_h = final_image.size
-            
-            # Координаты для круга (примерно в районе красного круга справа)
-            # Подкорректируй при необходимости
             x_pos = base_w - circle_diameter - 150
-            y_pos = 50
+            y_pos = 150
             
-            # Накладываем круговое фото на финальное изображение
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             
-            # Преобразуем в RGB и отправляем пользователю
             final_image_rgb = final_image.convert("RGB")
             out_stream = io.BytesIO()
             final_image_rgb.save(out_stream, format="JPEG")

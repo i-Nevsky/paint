@@ -186,6 +186,12 @@ def cancel(update, context):
     update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
+def reset(update, context):
+    context.user_data.clear()
+    update.message.reply_text("Контекст очищен. Можешь начинать заново.")
+
+dispatcher.add_handler(CommandHandler('reset', reset))
+
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={

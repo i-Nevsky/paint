@@ -80,9 +80,9 @@ def get_topic(update, context):
         draw = ImageDraw.Draw(base_image)
         
         # Шрифты: для даты/времени – размер 25; для эксперта и темы – размер 30
-        font_dt = ImageFont.truetype(FONT_PATH, 25)
-        font_expert = ImageFont.truetype(FONT_PATH, 30)
-        font_topic = ImageFont.truetype(FONT_PATH, 30)
+        font_dt = ImageFont.truetype(FONT_PATH, 45)
+        font_expert = ImageFont.truetype(FONT_PATH, 80)
+        font_topic = ImageFont.truetype(FONT_PATH, 80)
         
         # Получаем тексты, сохранённые в user_data
         dt_text = context.user_data.get("date_time_text", "")
@@ -93,10 +93,10 @@ def get_topic(update, context):
         draw.text((20, 20), dt_text, font=font_dt, fill="white")
         
         # Наносим фамилию и имя эксперта – размещаем так, чтобы текст был примерно по центру области слева
-        draw.text((20, 150), expert_text, font=font_expert, fill="white")
+        draw.text((20, 550), expert_text, font=font_expert, fill="white")
         
         # Наносим тему эфира под экспертом (например, (20,220))
-        draw.text((20, 220), topic_text, font=font_topic, fill="white")
+        draw.text((20, 620), topic_text, font=font_topic, fill="white")
         
         # Сохраняем полученное изображение с нанесёнными текстами в user_data для дальнейшей обработки фото
         context.user_data["final_image"] = base_image.copy()
@@ -130,7 +130,7 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             # Определяем диаметр круга для фото пользователя (например, 230 пикселей)
-            circle_diameter = 230
+            circle_diameter = 430
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
             # Создаём маску для обрезки фото по кругу
@@ -144,8 +144,8 @@ def get_photo(update, context):
             base_w, base_h = final_image.size
             # Пример: фото вставляется с отступом 50 пикселей от правого края и 80 от верхнего,
             # но можно изменить в зависимости от макета.
-            x_pos = base_w - circle_diameter - 50
-            y_pos = 80
+            x_pos = base_w - circle_diameter - 80
+            y_pos = 120
             
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             

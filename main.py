@@ -72,7 +72,7 @@ def split_date_time(dt_text):
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 2025 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -103,8 +103,8 @@ def get_topic(update, context):
         # ФИО эксперта – размер 70,
         # Тема эфира – размер 70.
         font_dt = ImageFont.truetype(FONT_PATH, 45)
-        font_expert = ImageFont.truetype(FONT_PATH, 70)
-        font_topic = ImageFont.truetype(FONT_PATH, 70)
+        font_expert = ImageFont.truetype(FONT_PATH, 60)
+        font_topic = ImageFont.truetype(FONT_PATH, 50)
         
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")

@@ -42,7 +42,7 @@ STATE_PHOTO = 4
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 2025-03-14 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 10 марта 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -73,8 +73,8 @@ def get_topic(update, context):
         # ФИО эксперта – размер 70,
         # Тема эфира – размер 70.
         font_dt = ImageFont.truetype(FONT_PATH, 45)
-        font_expert = ImageFont.truetype(FONT_PATH, 70)
-        font_topic = ImageFont.truetype(FONT_PATH, 70)
+        font_expert = ImageFont.truetype(FONT_PATH, 60)
+        font_topic = ImageFont.truetype(FONT_PATH, 50)
         
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
@@ -84,9 +84,9 @@ def get_topic(update, context):
         # Дата и время в верхнем левом углу (20,20)
         draw.text((20, 20), dt_text, font=font_dt, fill="white")
         # Фамилия и имя эксперта – (20,380)
-        draw.text((20, 380), expert_text, font=font_expert, fill="white")
+        draw.text((20, 350), expert_text, font=font_expert, fill="white")
         # Тема эфира – (20,450)
-        draw.text((20, 450), topic_text, font=font_topic, fill="white")
+        draw.text((20, 420), topic_text, font=font_topic, fill="white")
         
         # Сохраняем изображение с нанесёнными текстами
         context.user_data["final_image"] = base_image.copy()

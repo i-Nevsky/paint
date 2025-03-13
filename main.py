@@ -8,8 +8,10 @@ from telegram.ext import (
     CommandHandler,
     ConversationHandler,
     MessageHandler,
-    Filters
+    Filters,
+    CallbackQueryHandler
 )
+from telegram_bot_calendar import DetailedTelegramCalendar
 from PIL import Image, ImageDraw, ImageFont
 
 print("Current working directory:", os.getcwd())
@@ -23,7 +25,7 @@ if not TOKEN:
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
-# Пути к файлам (убедись, что файлы находятся в папке static в корне проекта)
+# Пути к файлам – убедись, что в папке static находятся base_image.png и roboto.ttf
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 
@@ -32,45 +34,46 @@ print("Файл изображения существует?", os.path.exists(BA
 print("Путь к шрифту:", FONT_PATH)
 print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
-# Определяем состояния диалога
+# Состояния диалога
 STATE_DATE_TIME = 1
 STATE_EXPERT = 2
 STATE_TOPIC = 3
 STATE_PHOTO = 4
 
-# Начало диалога – первый вопрос
+# 1. Начало диалога: inline календарь для выбора даты
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Пожалуйста, отправь дату и время: (формат 09 марта 13:00 МСК)"
+        f"Привет, {user_first_name}! Пожалуйста, выберите дату:"
     )
+    calendar, step = DetailedTelegramCalendar().build()
+    update.message.reply_text("Выберите дату:", reply_markup=calendar)
     return STATE_DATE_TIME
 
-# Обработка первого ответа: дата и время
-def get_date_time(update, context):
-    text = update.message.text
-    # Предполагаем, что пользователь вводит хотя бы 3 слова, например: "09 марта 13:00 МСК"
-    parts = text.split()
-    if len(parts) >= 3:
-        # Первые два слова – дата, остальные – время
-        date_line = " ".join(parts[:2])
-        time_line = " ".join(parts[2:])
-        final_dt_text = date_line + "\n" + time_line
-    else:
-        final_dt_text = text  # если пользователь ввёл недостаточно данных
+# Callback для календаря
+def calendar_callback(update, context):
+    query = update.callback_query
+    result, key, step = DetailedTelegramCalendar().process(query.data)
+    if not result and key:
+        query.edit_message_text(text=f"Выберите дату: {key}")
+        query.edit_message_reply_markup(reply_markup=key)
+        return STATE_DATE_TIME
+    elif result:
+        query.edit_message_text(text=f"Вы выбрали: {result}")
+        # Фиксированное время – можно дополнительно спросить, но здесь задаём 13:00 МСК
+        context.user_data["date_time_text"] = f"{result} 13:00 МСК"
+        query.message.reply_text("Напишите фамилию и имя эксперта:")
+        return STATE_EXPERT
 
-    context.user_data["date_time_text"] = final_dt_text
-    update.message.reply_text("Напишите фамилию и имя эксперта:")
-    return STATE_EXPERT
-
-# Обработка второго ответа: эксперт
+# 2. Получение фамилии и имени эксперта
 def get_expert(update, context):
     expert = update.message.text
+    logging.info(f"Получено имя эксперта: {expert}")
     context.user_data["expert_text"] = expert
     update.message.reply_text("Напишите тему эфира:")
     return STATE_TOPIC
 
-# Обработка третьего ответа: тема эфира и нанесение всех текстов на изображение
+# 3. Получение темы эфира и нанесение текстов на изображение
 def get_topic(update, context):
     topic = update.message.text
     context.user_data["topic_text"] = topic
@@ -78,27 +81,27 @@ def get_topic(update, context):
         # Открываем базовое изображение (PNG) и переводим в RGBA
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
-        
-        # Шрифты: для даты/времени – размер 25; для эксперта и темы – размер 30
+        # Шрифты:
+        # Дата/время – размер 25,
+        # ФИО эксперта – размер 30,
+        # Тема эфира – размер 30.
         font_dt = ImageFont.truetype(FONT_PATH, 45)
-        font_expert = ImageFont.truetype(FONT_PATH, 80)
-        font_topic = ImageFont.truetype(FONT_PATH, 80)
+        font_expert = ImageFont.truetype(FONT_PATH, 70)
+        font_topic = ImageFont.truetype(FONT_PATH, 70)
         
-        # Получаем тексты, сохранённые в user_data
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
         topic_text = context.user_data.get("topic_text", "")
         
-        # Наносим дату и время в верхнем левом углу (например, координаты (20,20))
+        # Наносим тексты:
+        # Дата и время в верхнем левом углу (20,20)
         draw.text((20, 20), dt_text, font=font_dt, fill="white")
+        # Фамилия и имя эксперта – размещаем, например, в точке (20,150)
+        draw.text((20, 150), expert_text, font=font_expert, fill="white")
+        # Тема эфира – под экспертом, в точке (20,220)
+        draw.text((20, 220), topic_text, font=font_topic, fill="white")
         
-        # Наносим фамилию и имя эксперта – размещаем так, чтобы текст был примерно по центру области слева
-        draw.text((20, 550), expert_text, font=font_expert, fill="white")
-        
-        # Наносим тему эфира под экспертом (например, (20,220))
-        draw.text((20, 620), topic_text, font=font_topic, fill="white")
-        
-        # Сохраняем полученное изображение с нанесёнными текстами в user_data для дальнейшей обработки фото
+        # Сохраняем изображение с нанесёнными текстами для дальнейшей обработки фото
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
@@ -110,7 +113,7 @@ def get_topic(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# Обработка фото: наложение обрезанного по кругу фото на изображение
+# 4. Получение фото: обрезка по кругу и вставка в заданную область (например, в красный кружок)
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -129,23 +132,21 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            # Определяем диаметр круга для фото пользователя (например, 230 пикселей)
+            # Задаем диаметр круга для фото пользователя (например, 430 пикселей)
             circle_diameter = 430
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
-            # Создаём маску для обрезки фото по кругу
+            # Создаем маску для обрезки по кругу
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
             user_photo.putalpha(mask)
             
-            # Рассчитываем позицию для вставки фото в "красный кружочек"
-            # Здесь можно подкорректировать: например, если кружок находится справа, можно задать:
+            # Рассчитываем позицию для вставки фото в красный кружок.
             base_w, base_h = final_image.size
-            # Пример: фото вставляется с отступом 50 пикселей от правого края и 80 от верхнего,
-            # но можно изменить в зависимости от макета.
-            x_pos = base_w - circle_diameter - 80
-            y_pos = 120
+            # Пример: фото вставляется с отступом 80 пикселей от правого края и 120 от верхнего края.
+            x_pos = base_w - circle_diameter - 90
+            y_pos = 170
             
             final_image.paste(user_photo, (x_pos, y_pos), user_photo)
             
@@ -188,7 +189,7 @@ def cancel(update, context):
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
-        STATE_DATE_TIME: [MessageHandler(Filters.text & ~Filters.command, get_date_time)],
+        STATE_DATE_TIME: [CallbackQueryHandler(calendar_callback)],
         STATE_EXPERT: [MessageHandler(Filters.text & ~Filters.command, get_expert)],
         STATE_TOPIC: [MessageHandler(Filters.text & ~Filters.command, get_topic)],
         STATE_PHOTO: [

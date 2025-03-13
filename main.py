@@ -102,7 +102,7 @@ def get_topic(update, context):
         # Дата/время – размер 45,
         # ФИО эксперта – размер 70,
         # Тема эфира – размер 70.
-        font_dt = ImageFont.truetype(FONT_PATH, 45)
+        font_dt = ImageFont.truetype(FONT_PATH, 50)
         font_expert = ImageFont.truetype(FONT_PATH, 60)
         font_topic = ImageFont.truetype(FONT_PATH, 50)
         
@@ -123,13 +123,13 @@ def get_topic(update, context):
             y_offset += font_dt.getsize(dt_time)[1] + 5
         
         # Рисуем ФИО эксперта на фиксированной позиции (например, (20,380))
-        draw.text((20, 380), expert_text, font=font_expert, fill="white")
+        draw.text((20, 370), expert_text, font=font_expert, fill="white")
         
         # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
         # Начинаем с x=20, значит доступная ширина = 570 - 20 = 550 пикселей.
         max_width = 550
         topic_lines = wrap_text(topic_text, font_topic, max_width)
-        y_offset_topic = 450
+        y_offset_topic = 440
         for line in topic_lines:
             draw.text((20, y_offset_topic), line, font=font_topic, fill="white")
             y_offset_topic += font_topic.getsize(line)[1] + 5

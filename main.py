@@ -104,7 +104,7 @@ def get_topic(update, context):
         expert_font_size = 70
         font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
         # Тема эфира – размер 70 (с дальнейшей регулировкой по высоте).
-        topic_font_size = 70
+        topic_font_size = 65
         font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
         
         dt_text = context.user_data.get("date_time_text", "")

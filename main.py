@@ -155,7 +155,7 @@ def get_topic(update, context):
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
-            "Тексты нанесены. Теперь отправь фото, которое нужно вставить в заданную область, "
+            "Тексты нанесены. Теперь отправь фото эксперта, "
             "или введи /skip, чтобы использовать только изображение с текстами."
         )
         return STATE_PHOTO

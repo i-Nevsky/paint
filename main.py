@@ -72,7 +72,7 @@ def split_date_time(dt_text):
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 2025 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -102,7 +102,7 @@ def get_topic(update, context):
         # Дата/время – размер 45,
         # ФИО эксперта – размер 70.
         font_dt = ImageFont.truetype(FONT_PATH, 45)
-        font_expert = ImageFont.truetype(FONT_PATH, 70)
+        font_expert = ImageFont.truetype(FONT_PATH, 60)
         
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
@@ -119,7 +119,7 @@ def get_topic(update, context):
             y_offset += font_dt.getsize(dt_time)[1] + 5
         
         # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
-        draw.text((20, 380), expert_text, font=font_expert, fill="white")
+        draw.text((20, 370), expert_text, font=font_expert, fill="white")
         
         # Рисуем тему эфира. Начинаем с y=450, максимум y=570, значит доступно 120 пикселей по высоте.
         topic_start_y = 450
@@ -185,7 +185,7 @@ def get_photo(update, context):
             
             base_w, base_h = final_image.size
             x_pos = base_w - circle_diameter - 90
-            y_pos = 170
+            y_pos = 190
             
             # Вместо простого paste создаём временный слой с прозрачным фоном,
             # куда вписываем картинку пользователя, а затем альфа-композитим её с базовым изображением.

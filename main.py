@@ -192,7 +192,7 @@ def get_photo(update, context):
             user_photo.putalpha(mask)
             
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 22
+            x_pos = base_w - circle_diameter - 23
             y_pos = 224
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото

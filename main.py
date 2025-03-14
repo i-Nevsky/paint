@@ -71,7 +71,7 @@ def split_date_time(dt_text):
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 2025 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -181,7 +181,7 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            circle_diameter = 430
+            circle_diameter = 450
             # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
             user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
             
@@ -192,7 +192,7 @@ def get_photo(update, context):
             user_photo.putalpha(mask)
             
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 110
+            x_pos = base_w - circle_diameter - 65
             y_pos = 240
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото

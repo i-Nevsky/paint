@@ -72,7 +72,7 @@ def split_date_time(dt_text):
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 2025 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -100,36 +100,47 @@ def get_topic(update, context):
         draw = ImageDraw.Draw(base_image)
         # Определяем шрифты:
         # Дата/время – размер 45,
-        # ФИО эксперта – размер 70,
-        # Тема эфира – размер 70.
-        font_dt = ImageFont.truetype(FONT_PATH, 50)
-        font_expert = ImageFont.truetype(FONT_PATH, 60)
-        font_topic = ImageFont.truetype(FONT_PATH, 50)
+        # ФИО эксперта – размер 70.
+        font_dt = ImageFont.truetype(FONT_PATH, 45)
+        font_expert = ImageFont.truetype(FONT_PATH, 70)
         
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
         topic_text = context.user_data.get("topic_text", "")
         
-        # Разбиваем дату и время:
+        # Разбиваем дату и время: отделяем время, если найдено (например, 13:00)
         dt_date, dt_time = split_date_time(dt_text)
         y_offset = 20
-        # Рисуем дату
         if dt_date:
             draw.text((20, y_offset), dt_date, font=font_dt, fill="white")
             y_offset += font_dt.getsize(dt_date)[1] + 5
-        # Рисуем время (если найдено)
         if dt_time:
             draw.text((20, y_offset), dt_time, font=font_dt, fill="white")
             y_offset += font_dt.getsize(dt_time)[1] + 5
         
-        # Рисуем ФИО эксперта на фиксированной позиции (например, (20,380))
-        draw.text((20, 370), expert_text, font=font_expert, fill="white")
+        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
+        draw.text((20, 380), expert_text, font=font_expert, fill="white")
         
-        # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
-        # Начинаем с x=20, значит доступная ширина = 570 - 20 = 550 пикселей.
-        max_width = 550
+        # Рисуем тему эфира. Начинаем с y=450, максимум y=570, значит доступно 120 пикселей по высоте.
+        topic_start_y = 450
+        max_topic_y = 570
+        available_height = max_topic_y - topic_start_y
+        max_width = 550  # доступная ширина (от 20 до 570)
+        
+        # Начальный размер шрифта для темы эфира
+        topic_font_size = 70
+        font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
         topic_lines = wrap_text(topic_text, font_topic, max_width)
-        y_offset_topic = 440
+        total_height = sum(font_topic.getsize(line)[1] for line in topic_lines) + (len(topic_lines)-1)*5
+        
+        # Если текст не умещается по высоте, уменьшаем шрифт до тех пор, пока не поместится
+        while total_height > available_height and topic_font_size > 10:
+            topic_font_size -= 5
+            font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
+            topic_lines = wrap_text(topic_text, font_topic, max_width)
+            total_height = sum(font_topic.getsize(line)[1] for line in topic_lines) + (len(topic_lines)-1)*5
+        
+        y_offset_topic = topic_start_y
         for line in topic_lines:
             draw.text((20, y_offset_topic), line, font=font_topic, fill="white")
             y_offset_topic += font_topic.getsize(line)[1] + 5
@@ -137,7 +148,7 @@ def get_topic(update, context):
         context.user_data["final_image"] = base_image.copy()
         
         update.message.reply_text(
-            "Тексты нанесены. Теперь отправь фото, которое нужно вставить в круг справа, "
+            "Тексты нанесены. Теперь отправь фото, которое нужно вставить в заданную область, "
             "или введи /skip, чтобы использовать только изображение с текстами."
         )
         return STATE_PHOTO
@@ -145,7 +156,7 @@ def get_topic(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# 4. Получение фото: обрезка по кругу и вставка в заданную область
+# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -163,8 +174,10 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             circle_diameter = 430
+            # Изменяем размер картинки пользователя
             user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
             
+            # Создаём маску для обрезки по кругу
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
@@ -174,7 +187,11 @@ def get_photo(update, context):
             x_pos = base_w - circle_diameter - 90
             y_pos = 170
             
-            final_image.paste(user_photo, (x_pos, y_pos), user_photo)
+            # Вместо простого paste создаём временный слой с прозрачным фоном,
+            # куда вписываем картинку пользователя, а затем альфа-композитим её с базовым изображением.
+            temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))
+            temp_layer.paste(user_photo, (0, 0), user_photo)
+            final_image.alpha_composite(temp_layer, (x_pos, y_pos))
             
             final_image_rgb = final_image.convert("RGB")
             out_stream = io.BytesIO()

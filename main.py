@@ -205,7 +205,7 @@ def get_photo(update, context):
             final_image_rgb.save(out_stream, format="JPEG")
             out_stream.seek(0)
             
-            update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение с наложенным фото!")
+            update.message.reply_photo(photo=out_stream, caption="Анонс к Кофе с Платинум готово! Для создания нового, нажми на /start!")
             
             try:
                 bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)

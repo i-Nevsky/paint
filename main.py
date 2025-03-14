@@ -11,7 +11,7 @@ from telegram.ext import (
     MessageHandler,
     Filters
 )
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 print("Current working directory:", os.getcwd())
 
@@ -58,7 +58,6 @@ def wrap_text(text, font, max_width):
     return lines
 
 # Функция для разделения даты и времени.
-# Ищем первый токен, содержащий шаблон времени (например, 13:00).
 def split_date_time(dt_text):
     tokens = dt_text.split()
     for i, token in enumerate(tokens):
@@ -72,7 +71,7 @@ def split_date_time(dt_text):
 def start(update, context):
     user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 2025 13:00 МСК):"
     )
     return STATE_DATE_INPUT
 
@@ -83,7 +82,7 @@ def get_date_time(update, context):
     update.message.reply_text("Напиши фамилию и имя эксперта:")
     return STATE_EXPERT
 
-# 2. Получение фамилии и имени эксперта
+# 2. Получение ФИО эксперта с автоматическим уменьшением шрифта при превышении ширины
 def get_expert(update, context):
     expert = update.message.text
     logging.info(f"Получено имя эксперта: {expert}")
@@ -99,10 +98,14 @@ def get_topic(update, context):
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
         # Определяем шрифты:
-        # Дата/время – размер 45,
-        # ФИО эксперта – размер 70.
+        # Дата/время – размер 45.
         font_dt = ImageFont.truetype(FONT_PATH, 45)
-        font_expert = ImageFont.truetype(FONT_PATH, 60)
+        # Для ФИО эксперта – начальный размер 70.
+        expert_font_size = 70
+        font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
+        # Тема эфира – размер 70 (с дальнейшей регулировкой по высоте).
+        topic_font_size = 70
+        font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
         
         dt_text = context.user_data.get("date_time_text", "")
         expert_text = context.user_data.get("expert_text", "")
@@ -118,18 +121,22 @@ def get_topic(update, context):
             draw.text((20, y_offset), dt_time, font=font_dt, fill="white")
             y_offset += font_dt.getsize(dt_time)[1] + 5
         
+        # Уменьшаем шрифт для ФИО эксперта, если текст выходит за пределы x=570 (доступная ширина 550 пикселей)
+        max_expert_width = 550
+        expert_text_width, _ = font_expert.getsize(expert_text)
+        while expert_text_width > max_expert_width and expert_font_size > 30:
+            expert_font_size -= 5
+            font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
+            expert_text_width, _ = font_expert.getsize(expert_text)
         # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
-        draw.text((20, 370), expert_text, font=font_expert, fill="white")
+        draw.text((20, 380), expert_text, font=font_expert, fill="white")
         
-        # Рисуем тему эфира. Начинаем с y=450, максимум y=570, значит доступно 120 пикселей по высоте.
+        # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
         topic_start_y = 450
         max_topic_y = 570
         available_height = max_topic_y - topic_start_y
-        max_width = 550  # доступная ширина (от 20 до 570)
+        max_width = 550  # доступная ширина от x=20 до x=570
         
-        # Начальный размер шрифта для темы эфира
-        topic_font_size = 70
-        font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
         topic_lines = wrap_text(topic_text, font_topic, max_width)
         total_height = sum(font_topic.getsize(line)[1] for line in topic_lines) + (len(topic_lines)-1)*5
         
@@ -156,7 +163,8 @@ def get_topic(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном
+# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном,
+# при этом картинку пользователя подгоняем с сохранением пропорций.
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -174,10 +182,10 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             circle_diameter = 430
-            # Изменяем размер картинки пользователя
-            user_photo = user_photo.resize((circle_diameter, circle_diameter), Image.ANTIALIAS)
+            # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
+            user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
             
-            # Создаём маску для обрезки по кругу
+            # Создаём маску для круглой обрезки
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
             mask_draw = ImageDraw.Draw(mask)
             mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
@@ -185,10 +193,9 @@ def get_photo(update, context):
             
             base_w, base_h = final_image.size
             x_pos = base_w - circle_diameter - 90
-            y_pos = 190
+            y_pos = 170
             
-            # Вместо простого paste создаём временный слой с прозрачным фоном,
-            # куда вписываем картинку пользователя, а затем альфа-композитим её с базовым изображением.
+            # Создаём временный слой с прозрачным фоном и вставляем на него фото
             temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))
             temp_layer.paste(user_photo, (0, 0), user_photo)
             final_image.alpha_composite(temp_layer, (x_pos, y_pos))

@@ -129,7 +129,7 @@ def get_topic(update, context):
             font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
             expert_text_width, _ = font_expert.getsize(expert_text)
         # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
-        draw.text((20, 380), expert_text, font=font_expert, fill="white")
+        draw.text((20, 370), expert_text, font=font_expert, fill="white")
         
         # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
         topic_start_y = 450
@@ -181,7 +181,7 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            circle_diameter = 450
+            circle_diameter = 470
             # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
             user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
             
@@ -192,7 +192,7 @@ def get_photo(update, context):
             user_photo.putalpha(mask)
             
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 55
+            x_pos = base_w - circle_diameter - 45
             y_pos = 235
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото

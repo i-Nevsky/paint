@@ -193,7 +193,7 @@ def get_photo(update, context):
             
             base_w, base_h = final_image.size
             x_pos = base_w - circle_diameter - 20
-            y_pos = 228
+            y_pos = 223
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото
             temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))

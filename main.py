@@ -181,7 +181,7 @@ def get_photo(update, context):
             
             final_image = final_image.convert("RGBA")
             
-            circle_diameter = 480
+            circle_diameter = 470
             # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
             user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
             
@@ -192,7 +192,7 @@ def get_photo(update, context):
             user_photo.putalpha(mask)
             
             base_w, base_h = final_image.size
-            x_pos = base_w - circle_diameter - 70
+            x_pos = base_w - circle_diameter - 60
             y_pos = 235
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото

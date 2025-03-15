@@ -103,7 +103,7 @@ def get_topic(update, context):
         # Для ФИО эксперта – начальный размер 70.
         expert_font_size = 70
         font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
-        # Тема эфира – размер 65 (с дальнейшей регулировкой по высоте).
+        # Тема эфира – размер 70 (с дальнейшей регулировкой по высоте).
         topic_font_size = 65
         font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
         
@@ -128,7 +128,7 @@ def get_topic(update, context):
             expert_font_size -= 5
             font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
             expert_text_width, _ = font_expert.getsize(expert_text)
-        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,370))
+        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
         draw.text((20, 370), expert_text, font=font_expert, fill="white")
         
         # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
@@ -164,7 +164,7 @@ def get_topic(update, context):
         return ConversationHandler.END
 
 # 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном,
-# при этом картинку пользователя подгоняем с сохранением пропорций без сильного сжатия.
+# при этом картинку пользователя подгоняем с сохранением пропорций.
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -182,14 +182,8 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             circle_diameter = 470
-            # Используем ImageOps.contain, чтобы сохранить пропорции,
-            # затем центрируем изображение на квадратном холсте заданного размера.
-            contained_photo = ImageOps.contain(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
-            new_photo = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))
-            offset_x = (circle_diameter - contained_photo.width) // 2
-            offset_y = (circle_diameter - contained_photo.height) // 2
-            new_photo.paste(contained_photo, (offset_x, offset_y))
-            user_photo = new_photo
+            # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
+            user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
             
             # Создаём маску для круглой обрезки
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)

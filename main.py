@@ -128,7 +128,7 @@ def get_topic(update, context):
             expert_font_size -= 5
             font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
             expert_text_width, _ = font_expert.getsize(expert_text)
-        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,380))
+        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,370))
         draw.text((20, 370), expert_text, font=font_expert, fill="white")
         
         # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
@@ -245,7 +245,8 @@ conv_handler = ConversationHandler(
             CommandHandler('skip', skip_photo)
         ]
     },
-    fallbacks=[CommandHandler('cancel', cancel)]
+    fallbacks=[CommandHandler('cancel', cancel)],
+    allow_reentry=True
 )
 
 dispatcher.add_handler(conv_handler)

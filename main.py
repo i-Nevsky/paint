@@ -163,8 +163,7 @@ def get_topic(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном,
-# при этом картинку пользователя подгоняем с сохранением пропорций.
+# 4. Получение фото: обрезка по кругу и вставка в заданную область
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -193,7 +192,7 @@ def get_photo(update, context):
             
             base_w, base_h = final_image.size
             x_pos = base_w - circle_diameter - 23
-            y_pos = 224
+            y_pos = 300  # Новое значение для смещения фото вниз
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото
             temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))

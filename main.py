@@ -163,7 +163,8 @@ def get_topic(update, context):
         update.message.reply_text(f"Ошибка при обработке изображения: {e}")
         return ConversationHandler.END
 
-# 4. Получение фото: обрезка по кругу и вставка в заданную область
+# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном,
+# при этом картинку пользователя подгоняем с сохранением пропорций.
 def get_photo(update, context):
     try:
         if update.message.photo:
@@ -181,8 +182,9 @@ def get_photo(update, context):
             final_image = final_image.convert("RGBA")
             
             circle_diameter = 470
-            # Используем ImageOps.fit для обрезки по центру с сохранением пропорций
-            user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS)
+            # Используем ImageOps.fit для обрезки фото по кругу,
+            # смещая область обрезки вверх с помощью параметра centering=(0.5, 0.3)
+            user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS, centering=(0.5, 0.3))
             
             # Создаём маску для круглой обрезки
             mask = Image.new("L", (circle_diameter, circle_diameter), 0)
@@ -192,7 +194,7 @@ def get_photo(update, context):
             
             base_w, base_h = final_image.size
             x_pos = base_w - circle_diameter - 23
-            y_pos = 300  # Новое значение для смещения фото вниз
+            y_pos = 224
             
             # Создаём временный слой с прозрачным фоном и вставляем на него фото
             temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))

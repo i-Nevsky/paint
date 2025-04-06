@@ -235,6 +235,15 @@ def cancel(update, context):
     update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
+# Новый глобальный обработчик, который сбрасывает состояние и запускает диалог с первого шага
+def reset_conversation(update, context):
+    context.user_data.clear()
+    return start(update, context)
+
+# Регистрируем глобальный обработчик, который срабатывает на любое сообщение (группа 0)
+dispatcher.add_handler(MessageHandler(Filters.all, reset_conversation), group=0)
+
+# Определяем и добавляем ConversationHandler во вторую группу (группа 1)
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
@@ -249,8 +258,7 @@ conv_handler = ConversationHandler(
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True
 )
-
-dispatcher.add_handler(conv_handler)
+dispatcher.add_handler(conv_handler, group=1)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():

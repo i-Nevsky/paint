@@ -240,10 +240,9 @@ def reset_conversation(update, context):
     context.user_data.clear()
     return start(update, context)
 
-# Регистрируем глобальный обработчик, который срабатывает на любое сообщение (группа 0)
-dispatcher.add_handler(MessageHandler(Filters.all, reset_conversation), group=0)
+# Глобальный обработчик, который срабатывает на обычный текст (но не на команды)
+dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, reset_conversation), group=0)
 
-# Определяем и добавляем ConversationHandler во вторую группу (группа 1)
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={

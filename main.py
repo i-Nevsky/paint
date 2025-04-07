@@ -226,7 +226,7 @@ def skip_photo(update, context):
         out_stream = io.BytesIO()
         final_image_rgb.save(out_stream, format="JPEG")
         out_stream.seek(0)
-        update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение без дополнительного фото!")
+        update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение без дополнительного фото! Для создания нового, нажми на /start")
     else:
         update.message.reply_text("Изображение не найдено.")
     return ConversationHandler.END

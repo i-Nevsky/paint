@@ -12,7 +12,8 @@ from telegram.ext import (
 )
 from PIL import Image, ImageDraw, ImageFont
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
+
 
 app = Flask(__name__)
 

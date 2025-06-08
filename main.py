@@ -2,7 +2,7 @@ import logging
 import os
 import io
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -19,9 +19,14 @@ dispatcher = Dispatcher(bot, None, workers=0)
 
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")  # Название как на скрине
+BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")
 
 STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
+
+def draw_centered(draw, text, font, y, x_left, x_right, fill="black"):
+    w, h = draw.textsize(text, font=font)
+    x = x_left + (x_right - x_left - w) // 2
+    draw.text((x, y), text, font=font, fill=fill)
 
 def start(update, context):
     keyboard = [["Создать благ. письмо ФАБА"], ["Создать анонс к Кофе"]]
@@ -41,23 +46,23 @@ def choose_mode(update, context):
         )
         return STATE_FIO
     elif text == "Создать анонс к Кофе":
-        update.message.reply_text("Эта функция пока не реализована.", reply_markup=ReplyKeyboardRemove())
+        update.message.reply_text("Эта функция пока не реализована.")
         return ConversationHandler.END
 
 def get_gender(update, context):
     context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
     return STATE_BODY
 
 def get_fio(update, context):
     context.user_data["fio"] = update.message.text.strip()
-    update.message.reply_text("Введите основной текст (выражение благодарности):")
+    update.message.reply_text("Введите основной текст (выражение благодарности):", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
     return STATE_CITYDATE
 
 def get_body(update, context):
     context.user_data["body"] = update.message.text.strip()
-    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
-    return STATE_CITYDATE  # <--- возвращаем правильное состояние
+    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
+    return ConversationHandler.END
 
 def get_city_date(update, context):
     context.user_data["citydate"] = update.message.text.strip()
@@ -65,46 +70,41 @@ def get_city_date(update, context):
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
 
-        # Координаты по сетке
-        coord = {
-            "gender": (520, 340),
-            "fio1": (320, 400),
-            "fio2": (320, 470),
-            "body": (180, 590),
-            "body_max_width": 1050,
-            "body_max_height": 460,  # 1050-590
-            "sign": (570, 1080),
-            "citydate": (1200, 1120)
-        }
-
-        # Шрифты
-        font_gender = ImageFont.truetype(BOLD_FONT_PATH, 40)
-        font_fio = ImageFont.truetype(BOLD_FONT_PATH, 56)
-        font_fio2 = ImageFont.truetype(BOLD_FONT_PATH, 68)
-        font_body = ImageFont.truetype(FONT_PATH, 30)
+        font_header = ImageFont.truetype(BOLD_FONT_PATH, 36)
+        font_fio = ImageFont.truetype(BOLD_FONT_PATH, 52)
+        font_body = ImageFont.truetype(FONT_PATH, 28)
         font_sign = ImageFont.truetype(FONT_PATH, 28)
-        font_footer = ImageFont.truetype(FONT_PATH, 28)
+        font_footer = ImageFont.truetype(FONT_PATH, 22)
 
         gender = context.user_data.get("gender", "")
         fio = context.user_data.get("fio", "")
         body = context.user_data.get("body", "")
         citydate = context.user_data.get("citydate", "")
 
-        # ФИО делим на 2 строки: имя+отчество и фамилия
+        # Координаты по сетке
+        x_left, x_right = 150, 1100  # Границы белого блока (примерно по твоей сетке)
+        y_gender = 340
+        y_fio = 400
+        y_body = 520
+        y_sign = 850
+        y_footer = 1060
+
+        # 1. Обращение
+        draw_centered(draw, gender, font_header, y_gender, x_left, x_right)
+
+        # 2. ФИО (делим на 2 строки если три слова)
         fio_parts = fio.split()
         if len(fio_parts) == 3:
-            fio_line1 = f"{fio_parts[0]} {fio_parts[1]}"
+            fio_line1 = fio_parts[0] + " " + fio_parts[1]
             fio_line2 = fio_parts[2]
         else:
             fio_line1 = fio
             fio_line2 = ""
+        draw_centered(draw, fio_line1, font_fio, y_fio, x_left, x_right)
+        if fio_line2:
+            draw_centered(draw, fio_line2, font_fio, y_fio + font_fio.getsize(fio_line1)[1] + 5, x_left, x_right)
 
-        # Рисуем
-        draw.text(coord["gender"], gender, font=font_gender, fill="black")
-        draw.text(coord["fio1"], fio_line1, font=font_fio, fill="black")
-        draw.text(coord["fio2"], fio_line2, font=font_fio2, fill="black")
-
-        # Основной текст — перенос строк по ширине
+        # 3. Основной текст по центру, многострочный
         def wrap_text(text, font, max_width):
             words = text.split()
             lines = []
@@ -114,37 +114,39 @@ def get_city_date(update, context):
                 if font.getsize(test_line)[0] <= max_width:
                     line = test_line
                 else:
-                    if line:
-                        lines.append(line)
+                    lines.append(line)
                     line = word
             if line:
                 lines.append(line)
             return lines
 
-        body_lines = wrap_text(body, font_body, coord["body_max_width"])
-        y_offset = coord["body"][1]
+        body_lines = wrap_text(body, font_body, x_right - x_left)
+        y_off = y_body
         for line in body_lines:
-            draw.text((coord["body"][0], y_offset), line, font=font_body, fill="black")
-            y_offset += font_body.getsize(line)[1] + 5
-            if y_offset > coord["body"][1] + coord["body_max_height"]:
-                break
+            draw_centered(draw, line, font_body, y_off, x_left, x_right)
+            y_off += font_body.getsize(line)[1] + 5
 
-        # Подпись и дата
+        # 4. Подпись
         sign_text = "Федеральная ассоциация\nбухгалтеров-аутсорсеров\n«ПлатинУМ»"
-        draw.text(coord["sign"], sign_text, font=font_sign, fill="black")
-        draw.text(coord["citydate"], citydate, font=font_footer, fill="black")
+        for idx, s_line in enumerate(sign_text.splitlines()):
+            draw_centered(draw, s_line, font_sign, y_sign + idx * (font_sign.getsize(s_line)[1] + 2), x_left, x_right)
+
+        # 5. Город и дата
+        draw_centered(draw, citydate, font_footer, y_footer, x_left, x_right)
 
         out_stream = io.BytesIO()
         base_image.save(out_stream, format="PNG")
         out_stream.seek(0)
-        update.message.reply_photo(photo=out_stream, caption="Готово!", reply_markup=ReplyKeyboardRemove())
+        update.message.reply_photo(photo=out_stream, caption="Готово!")
+
     except Exception as e:
         update.message.reply_text(f"Ошибка при создании письма: {e}")
 
+    # Вернёмся к стартовому меню
     return start(update, context)
 
 def cancel(update, context):
-    update.message.reply_text("Отмена.", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
 conv_handler = ConversationHandler(
@@ -153,11 +155,13 @@ conv_handler = ConversationHandler(
         STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
         STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
         STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
-        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
+        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
+        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
     },
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True
 )
+
 dispatcher.add_handler(conv_handler)
 
 @app.route('/webhook', methods=['POST'])

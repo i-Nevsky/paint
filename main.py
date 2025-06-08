@@ -58,7 +58,7 @@ def get_fio(update, context):
 def get_body(update, context):
     context.user_data["body"] = update.message.text.strip()
     update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
-    return ConversationHandler.END
+    return STATE_CITYDATE  # Должно быть так!
 
 def get_city_date(update, context):
     context.user_data["citydate"] = update.message.text.strip()

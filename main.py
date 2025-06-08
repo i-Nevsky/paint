@@ -2,7 +2,7 @@ import logging
 import os
 import io
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup
+from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -11,6 +11,8 @@ from telegram.ext import (
     Filters
 )
 from PIL import Image, ImageDraw, ImageFont
+
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or 'ТВОЙ_ТОКЕН_СЮДА'
@@ -22,7 +24,8 @@ BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")
 
-STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
+# Состояния
+STATE_MODE, STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(5)
 
 def start(update, context):
     keyboard = [["Создать благ. письмо ФАБА"], ["Создать анонс к Кофе"]]
@@ -30,146 +33,133 @@ def start(update, context):
         "Выберите действие:",
         reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     )
-    return STATE_GENDER
+    return STATE_MODE
 
 def choose_mode(update, context):
-    text = update.message.text
-    if text == "Создать благ. письмо ФАБА":
-        gender_keyboard = [["Уважаемый"], ["Уважаемая"]]
+    if update.message.text == "Создать благ. письмо ФАБА":
+        kb = [["Уважаемый"], ["Уважаемая"]]
         update.message.reply_text(
             "Выберите обращение:",
-            reply_markup=ReplyKeyboardMarkup(gender_keyboard, resize_keyboard=True)
+            reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True)
         )
-        return STATE_FIO
-    elif text == "Создать анонс к Кофе":
-        update.message.reply_text("Эта функция пока не реализована.")
-        return ConversationHandler.END
+        return STATE_GENDER
 
-def get_gender(update, context):
-    context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО:")
-    return STATE_BODY
-
-def get_fio(update, context):
-    context.user_data["fio"] = update.message.text.strip()
-    update.message.reply_text("Введите основной текст (выражение благодарности):")
-    return STATE_CITYDATE
-
-def get_body(update, context):
-    context.user_data["body"] = update.message.text.strip()
-    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
-    return STATE_CITYDATE  # Должно быть так!
-
-def get_city_date(update, context):
-    context.user_data["citydate"] = update.message.text.strip()
-    try:
-        base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
-        draw = ImageDraw.Draw(base_image)
-
-        # Настрой шрифтов (размеры отрегулированы под сетку)
-        font_header = ImageFont.truetype(BOLD_FONT_PATH, 38)     # Обращение
-        font_fio = ImageFont.truetype(BOLD_FONT_PATH, 46)        # Имя Отчество
-        font_fio2 = ImageFont.truetype(BOLD_FONT_PATH, 60)       # Фамилия
-        font_body = ImageFont.truetype(FONT_PATH, 24)            # Основной текст
-        font_footer = ImageFont.truetype(FONT_PATH, 22)          # Подпись и город/дата
-
-        gender = context.user_data.get("gender", "")
-        fio = context.user_data.get("fio", "")
-        body = context.user_data.get("body", "")
-        citydate = context.user_data.get("citydate", "")
-
-        # ФИО разбиваем на Имя Отчество и Фамилию
-        fio_parts = fio.split()
-        fio_line1, fio_line2 = "", ""
-        if len(fio_parts) == 3:
-            fio_line1 = fio_parts[0] + " " + fio_parts[1]
-            fio_line2 = fio_parts[2]
-        else:
-            fio_line1 = fio
-            fio_line2 = ""
-
-        # ====== ТОЧНЫЕ КООРДИНАТЫ (по твоей сетке) ======
-        # Обращение
-        x_gender, y_gender = 500, 420
-        # Имя Отчество
-        x_fio1, y_fio1 = 320, 510
-        # Фамилия
-        x_fio2, y_fio2 = 250, 600
-        # Основной текст (переносим по ширине)
-        x_body, y_body = 200, 740
-        max_width_body = 1000
-        # Подпись (оставляю старое место, по твоему шаблону ~350, 1250)
-        x_sign, y_sign = 350, 1250
-        # Город и дата
-        x_footer, y_footer = 1350, 1370
-
-        draw.text((x_gender, y_gender), gender, font=font_header, fill="black")
-        draw.text((x_fio1, y_fio1), fio_line1, font=font_fio, fill="black")
-        draw.text((x_fio2, y_fio2), fio_line2, font=font_fio2, fill="black")
-
-        def wrap_text(text, font, max_width):
-            words = text.split()
-            lines = []
-            line = ""
-            for word in words:
-                test_line = line + (" " if line else "") + word
-                if font.getsize(test_line)[0] <= max_width:
-                    line = test_line
-                else:
-                    lines.append(line)
-                    line = word
-            if line:
-                lines.append(line)
-            return lines
-
-        body_lines = wrap_text(body, font_body, max_width_body)
-        y_offset = y_body
-        for line in body_lines:
-            draw.text((x_body, y_offset), line, font=font_body, fill="black")
-            y_offset += font_body.getsize(line)[1] + 8
-
-        sign_text = "Федеральная ассоциация\nбухгалтеров-аутсорсеров\n«ПлатинУМ»"
-        draw.text((x_sign, y_sign), sign_text, font=font_footer, fill="black")
-        draw.text((x_footer, y_footer), citydate, font=font_footer, fill="black")
-
-        out_stream = io.BytesIO()
-        base_image.save(out_stream, format="PNG")
-        out_stream.seek(0)
-        update.message.reply_photo(photo=out_stream, caption="Готово!")
-    except Exception as e:
-        update.message.reply_text(f"Ошибка при создании письма: {e}")
-    return start(update, context)
-
-def cancel(update, context):
-    update.message.reply_text("Отмена.")
+    update.message.reply_text("Эта функция пока не реализована.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start)],
+def get_gender(update, context):
+    context.user_data["gender"] = update.message.text
+    update.message.reply_text("Введите ФИО (Имя Отчество):", reply_markup=ReplyKeyboardRemove())
+    return STATE_FIO
+
+def get_fio(update, context):
+    # сохраняем полное ФИО, распишем потом на две строки
+    context.user_data["full_fio"] = update.message.text
+    update.message.reply_text("Введите основной текст (выражение благодарности):")
+    return STATE_BODY
+
+def get_body(update, context):
+    context.user_data["body"] = update.message.text
+    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
+    return STATE_CITYDATE
+
+def get_city_date(update, context):
+    context.user_data["citydate"] = update.message.text
+
+    # Открываем изображение
+    base = Image.open(BASE_IMAGE_PATH).convert("RGBA")
+    draw = ImageDraw.Draw(base)
+
+    # Шрифты
+    font_gender = ImageFont.truetype(BOLD_FONT_PATH, 36)
+    font_name = ImageFont.truetype(BOLD_FONT_PATH, 52)
+    font_body = ImageFont.truetype(FONT_PATH, 28)
+    font_footer = ImageFont.truetype(FONT_PATH, 22)
+
+    # Тексты и координаты по твоему ТЗ
+    gender = context.user_data["gender"]
+    # Раскладываем ФИО на имя+отчество и фамилию
+    parts = context.user_data["full_fio"].split()
+    if len(parts) >= 2:
+        name_part = " ".join(parts[:-1])
+        surname = parts[-1]
+    else:
+        name_part = context.user_data["full_fio"]
+        surname = ""
+
+    body = context.user_data["body"]
+    citydate = context.user_data["citydate"]
+
+    # Новые координаты:
+    # Обращение
+    draw.text((500, 420), gender, font=font_gender, fill="black")
+    # Имя и отчество
+    draw.text((320, 510), name_part, font=font_name, fill="black")
+    # Фамилия
+    draw.text((250, 600), surname, font=font_name, fill="black")
+    # Основной текст
+    def wrap(text, fnt, max_w):
+        words = text.split()
+        lines = []
+        cur = ""
+        for w in words:
+            test = (cur + " " + w).strip()
+            if fnt.getsize(test)[0] <= max_w:
+                cur = test
+            else:
+                lines.append(cur)
+                cur = w
+        if cur:
+            lines.append(cur)
+        return lines
+
+    lines = wrap(body, font_body, 970)
+    y = 740
+    for ln in lines:
+        draw.text((200, y), ln, font=font_body, fill="black")
+        y += font_body.getsize(ln)[1] + 6
+
+    # Город и дата
+    draw.text((1350, 1370), citydate, font=font_footer, fill="black")
+
+    # Отправляем результат
+    bio = io.BytesIO()
+    base.save(bio, format="PNG")
+    bio.seek(0)
+    update.message.reply_photo(photo=bio, caption="Готово!", reply_markup=ReplyKeyboardRemove())
+
+    return ConversationHandler.END
+
+def cancel(update, context):
+    update.message.reply_text("Отмена.", reply_markup=ReplyKeyboardRemove())
+    return ConversationHandler.END
+
+conv = ConversationHandler(
+    entry_points=[CommandHandler("start", start)],
     states={
-        STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
-        STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
-        STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
-        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
-        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
+        STATE_MODE:   [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
+        STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
+        STATE_FIO:    [MessageHandler(Filters.text & ~Filters.command, get_fio)],
+        STATE_BODY:   [MessageHandler(Filters.text & ~Filters.command, get_body)],
+        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_city_date)],
     },
-    fallbacks=[CommandHandler('cancel', cancel)],
+    fallbacks=[CommandHandler("cancel", cancel)],
     allow_reentry=True
 )
 
-dispatcher.add_handler(conv_handler)
+dispatcher.add_handler(conv)
 
-@app.route('/webhook', methods=['POST'])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, bot)
     dispatcher.process_update(update)
     return "ok", 200
 
-@app.route('/')
+@app.route("/")
 def index():
-    return "Сервис Telegram бота работает"
+    return "Service up"
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

@@ -2,7 +2,7 @@ import logging
 import os
 import io
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -22,7 +22,6 @@ BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
 BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")
 
-# Состояния
 STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
 
 def start(update, context):
@@ -48,7 +47,7 @@ def choose_mode(update, context):
 
 def get_gender(update, context):
     context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО (Имя Отчество Фамилия):", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Введите ФИО:")
     return STATE_BODY
 
 def get_fio(update, context):
@@ -59,7 +58,7 @@ def get_fio(update, context):
 def get_body(update, context):
     context.user_data["body"] = update.message.text.strip()
     update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
-    return STATE_CITYDATE + 1  # Переход к следующему состоянию
+    return ConversationHandler.END
 
 def get_city_date(update, context):
     context.user_data["citydate"] = update.message.text.strip()
@@ -67,20 +66,21 @@ def get_city_date(update, context):
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
 
-        # Шрифты
-        font_header = ImageFont.truetype(BOLD_FONT_PATH, 46)  # "Уважаемый"
-        font_fio = ImageFont.truetype(BOLD_FONT_PATH, 64)
-        font_fio2 = ImageFont.truetype(BOLD_FONT_PATH, 72)
-        font_body = ImageFont.truetype(FONT_PATH, 32)
-        font_footer = ImageFont.truetype(FONT_PATH, 26)
+        # Настрой шрифтов (размеры отрегулированы под сетку)
+        font_header = ImageFont.truetype(BOLD_FONT_PATH, 38)     # Обращение
+        font_fio = ImageFont.truetype(BOLD_FONT_PATH, 46)        # Имя Отчество
+        font_fio2 = ImageFont.truetype(BOLD_FONT_PATH, 60)       # Фамилия
+        font_body = ImageFont.truetype(FONT_PATH, 24)            # Основной текст
+        font_footer = ImageFont.truetype(FONT_PATH, 22)          # Подпись и город/дата
 
         gender = context.user_data.get("gender", "")
         fio = context.user_data.get("fio", "")
         body = context.user_data.get("body", "")
         citydate = context.user_data.get("citydate", "")
 
-        # Разбиваем ФИО
+        # ФИО разбиваем на Имя Отчество и Фамилию
         fio_parts = fio.split()
+        fio_line1, fio_line2 = "", ""
         if len(fio_parts) == 3:
             fio_line1 = fio_parts[0] + " " + fio_parts[1]
             fio_line2 = fio_parts[2]
@@ -88,27 +88,25 @@ def get_city_date(update, context):
             fio_line1 = fio
             fio_line2 = ""
 
-        # ====== КООРДИНАТЫ по твоей сетке ======
-        # Обращение (“Уважаемый”)
+        # ====== ТОЧНЫЕ КООРДИНАТЫ (по твоей сетке) ======
+        # Обращение
         x_gender, y_gender = 500, 420
-        # ФИО (Имя Отчество)
+        # Имя Отчество
         x_fio1, y_fio1 = 320, 510
-        # ФИО (Фамилия)
+        # Фамилия
         x_fio2, y_fio2 = 250, 600
-        # Основной текст
+        # Основной текст (переносим по ширине)
         x_body, y_body = 200, 740
-        max_width_body = 1100
+        max_width_body = 1000
+        # Подпись (оставляю старое место, по твоему шаблону ~350, 1250)
+        x_sign, y_sign = 350, 1250
         # Город и дата
         x_footer, y_footer = 1350, 1370
 
-        # 1. Обращение
         draw.text((x_gender, y_gender), gender, font=font_header, fill="black")
-
-        # 2. ФИО (Имя Отчество, Фамилия)
         draw.text((x_fio1, y_fio1), fio_line1, font=font_fio, fill="black")
         draw.text((x_fio2, y_fio2), fio_line2, font=font_fio2, fill="black")
 
-        # 3. Основной текст с переносами по ширине
         def wrap_text(text, font, max_width):
             words = text.split()
             lines = []
@@ -128,13 +126,10 @@ def get_city_date(update, context):
         y_offset = y_body
         for line in body_lines:
             draw.text((x_body, y_offset), line, font=font_body, fill="black")
-            y_offset += font_body.getsize(line)[1] + 6
+            y_offset += font_body.getsize(line)[1] + 8
 
-        # 4. Подпись
         sign_text = "Федеральная ассоциация\nбухгалтеров-аутсорсеров\n«ПлатинУМ»"
-        draw.text((350, 1250), sign_text, font=font_footer, fill="black")
-
-        # 5. Город и дата
+        draw.text((x_sign, y_sign), sign_text, font=font_footer, fill="black")
         draw.text((x_footer, y_footer), citydate, font=font_footer, fill="black")
 
         out_stream = io.BytesIO()
@@ -143,11 +138,10 @@ def get_city_date(update, context):
         update.message.reply_photo(photo=out_stream, caption="Готово!")
     except Exception as e:
         update.message.reply_text(f"Ошибка при создании письма: {e}")
-
     return start(update, context)
 
 def cancel(update, context):
-    update.message.reply_text("Отмена.", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
 conv_handler = ConversationHandler(
@@ -157,7 +151,7 @@ conv_handler = ConversationHandler(
         STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
         STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
         STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
-        STATE_CITYDATE+1: [MessageHandler(Filters.text & ~Filters.command, get_city_date)],
+        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
     },
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True

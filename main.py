@@ -2,7 +2,7 @@ import logging
 import os
 import io
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Bot, Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -20,7 +20,7 @@ dispatcher = Dispatcher(bot, None, workers=0)
 # Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "roboto_bold.ttf")
+BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")
 
 # Состояния
 STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
@@ -48,7 +48,7 @@ def choose_mode(update, context):
 
 def get_gender(update, context):
     context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Введите ФИО:")
     return STATE_BODY
 
 def get_fio(update, context):
@@ -78,30 +78,34 @@ def get_city_date(update, context):
         body = context.user_data.get("body", "")
         citydate = context.user_data.get("citydate", "")
 
-        # Точные координаты по твоей сетке:
-        x_gender, y_gender = 500, 420     # Обращение
-        x_fio_name, y_fio_name = 320, 510 # Имя Отчество
-        x_fio_surname, y_fio_surname = 250, 600 # Фамилия
-        x_body, y_body = 200, 740         # Основной текст
-        x_footer, y_footer = 1350, 1370   # Город и дата
-        x_sign, y_sign = 400, 1100        # Подпись
+        # === ТВОИ КООРДИНАТЫ ===
+        # Обращение
+        x_gender, y_gender = 500, 420
+        # Имя + Отчество
+        x_fio1, y_fio1 = 320, 510
+        # Фамилия
+        x_fio2, y_fio2 = 250, 600
+        # Основной текст
+        x_body, y_body = 200, 740
+        w_body = 1000  # ширина строки для переноса
+        # Город и дата
+        x_footer, y_footer = 1350, 1370
 
         # 1. Обращение
         draw.text((x_gender, y_gender), gender, font=font_header, fill="black")
 
-        # 2. ФИО (делим по пробелам)
+        # 2. ФИО: делим на две строки (Имя+Отчество и Фамилия)
         fio_parts = fio.split()
-        fio_name, fio_surname = "", ""
         if len(fio_parts) == 3:
-            fio_name = f"{fio_parts[0]} {fio_parts[1]}"
-            fio_surname = fio_parts[2]
+            fio_line1 = fio_parts[0] + " " + fio_parts[1]
+            fio_line2 = fio_parts[2]
         else:
-            fio_name = fio
-            fio_surname = ""
-        draw.text((x_fio_name, y_fio_name), fio_name, font=font_fio, fill="black")
-        draw.text((x_fio_surname, y_fio_surname), fio_surname, font=font_fio, fill="black")
+            fio_line1 = fio
+            fio_line2 = ""
+        draw.text((x_fio1, y_fio1), fio_line1, font=font_fio, fill="black")
+        draw.text((x_fio2, y_fio2), fio_line2, font=font_fio, fill="black")
 
-        # 3. Основной текст с переносом строк
+        # 3. Основной текст с переносом
         def wrap_text(text, font, max_width):
             words = text.split()
             lines = []
@@ -117,16 +121,15 @@ def get_city_date(update, context):
                 lines.append(line)
             return lines
 
-        max_width_body = 1100
-        body_lines = wrap_text(body, font_body, max_width_body)
+        body_lines = wrap_text(body, font_body, w_body)
         y_offset = y_body
         for line in body_lines:
             draw.text((x_body, y_offset), line, font=font_body, fill="black")
-            y_offset += font_body.getsize(line)[1] + 8
+            y_offset += font_body.getsize(line)[1] + 6
 
-        # 4. Подпись — фиксированный текст (при необходимости смести)
+        # 4. Подпись (фиксированные координаты)
         sign_text = "Федеральная ассоциация\nбухгалтеров-аутсорсеров\n«ПлатинУМ»"
-        draw.text((x_sign, y_sign), sign_text, font=font_sign, fill="black")
+        draw.text((400, 1150), sign_text, font=font_sign, fill="black")
 
         # 5. Город и дата
         draw.text((x_footer, y_footer), citydate, font=font_footer, fill="black")
@@ -135,7 +138,6 @@ def get_city_date(update, context):
         base_image.save(out_stream, format="PNG")
         out_stream.seek(0)
         update.message.reply_photo(photo=out_stream, caption="Готово!")
-
     except Exception as e:
         update.message.reply_text(f"Ошибка при создании письма: {e}")
 
@@ -151,7 +153,8 @@ conv_handler = ConversationHandler(
         STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
         STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
         STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
-        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_city_date)],  # <-- ТУТ!
+        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
+        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
     },
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True

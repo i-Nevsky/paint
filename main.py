@@ -151,8 +151,7 @@ conv_handler = ConversationHandler(
         STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
         STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
         STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
-        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
-        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_city_date)]
+        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_city_date)],  # <-- ТУТ!
     },
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True

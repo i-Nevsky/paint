@@ -2,7 +2,7 @@ import logging
 import os
 import io
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup
+from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -17,16 +17,13 @@ TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or 'ТВОЙ_ТОКЕН_СЮДА'
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
+# Пути к файлам
 BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "Roboto-Bold.ttf")
+BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "roboto_bold.ttf")
 
+# Состояния
 STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
-
-def draw_centered(draw, text, font, y, x_left, x_right, fill="black"):
-    w, h = draw.textsize(text, font=font)
-    x = x_left + (x_right - x_left - w) // 2
-    draw.text((x, y), text, font=font, fill=fill)
 
 def start(update, context):
     keyboard = [["Создать благ. письмо ФАБА"], ["Создать анонс к Кофе"]]
@@ -51,17 +48,17 @@ def choose_mode(update, context):
 
 def get_gender(update, context):
     context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
+    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardRemove())
     return STATE_BODY
 
 def get_fio(update, context):
     context.user_data["fio"] = update.message.text.strip()
-    update.message.reply_text("Введите основной текст (выражение благодарности):", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
+    update.message.reply_text("Введите основной текст (выражение благодарности):")
     return STATE_CITYDATE
 
 def get_body(update, context):
     context.user_data["body"] = update.message.text.strip()
-    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):", reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True))
+    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
     return ConversationHandler.END
 
 def get_city_date(update, context):
@@ -81,30 +78,30 @@ def get_city_date(update, context):
         body = context.user_data.get("body", "")
         citydate = context.user_data.get("citydate", "")
 
-        # Координаты по сетке
-        x_left, x_right = 150, 1100  # Границы белого блока (примерно по твоей сетке)
-        y_gender = 340
-        y_fio = 400
-        y_body = 520
-        y_sign = 850
-        y_footer = 1060
+        # Точные координаты по твоей сетке:
+        x_gender, y_gender = 500, 420     # Обращение
+        x_fio_name, y_fio_name = 320, 510 # Имя Отчество
+        x_fio_surname, y_fio_surname = 250, 600 # Фамилия
+        x_body, y_body = 200, 740         # Основной текст
+        x_footer, y_footer = 1350, 1370   # Город и дата
+        x_sign, y_sign = 400, 1100        # Подпись
 
         # 1. Обращение
-        draw_centered(draw, gender, font_header, y_gender, x_left, x_right)
+        draw.text((x_gender, y_gender), gender, font=font_header, fill="black")
 
-        # 2. ФИО (делим на 2 строки если три слова)
+        # 2. ФИО (делим по пробелам)
         fio_parts = fio.split()
+        fio_name, fio_surname = "", ""
         if len(fio_parts) == 3:
-            fio_line1 = fio_parts[0] + " " + fio_parts[1]
-            fio_line2 = fio_parts[2]
+            fio_name = f"{fio_parts[0]} {fio_parts[1]}"
+            fio_surname = fio_parts[2]
         else:
-            fio_line1 = fio
-            fio_line2 = ""
-        draw_centered(draw, fio_line1, font_fio, y_fio, x_left, x_right)
-        if fio_line2:
-            draw_centered(draw, fio_line2, font_fio, y_fio + font_fio.getsize(fio_line1)[1] + 5, x_left, x_right)
+            fio_name = fio
+            fio_surname = ""
+        draw.text((x_fio_name, y_fio_name), fio_name, font=font_fio, fill="black")
+        draw.text((x_fio_surname, y_fio_surname), fio_surname, font=font_fio, fill="black")
 
-        # 3. Основной текст по центру, многострочный
+        # 3. Основной текст с переносом строк
         def wrap_text(text, font, max_width):
             words = text.split()
             lines = []
@@ -120,19 +117,19 @@ def get_city_date(update, context):
                 lines.append(line)
             return lines
 
-        body_lines = wrap_text(body, font_body, x_right - x_left)
-        y_off = y_body
+        max_width_body = 1100
+        body_lines = wrap_text(body, font_body, max_width_body)
+        y_offset = y_body
         for line in body_lines:
-            draw_centered(draw, line, font_body, y_off, x_left, x_right)
-            y_off += font_body.getsize(line)[1] + 5
+            draw.text((x_body, y_offset), line, font=font_body, fill="black")
+            y_offset += font_body.getsize(line)[1] + 8
 
-        # 4. Подпись
+        # 4. Подпись — фиксированный текст (при необходимости смести)
         sign_text = "Федеральная ассоциация\nбухгалтеров-аутсорсеров\n«ПлатинУМ»"
-        for idx, s_line in enumerate(sign_text.splitlines()):
-            draw_centered(draw, s_line, font_sign, y_sign + idx * (font_sign.getsize(s_line)[1] + 2), x_left, x_right)
+        draw.text((x_sign, y_sign), sign_text, font=font_sign, fill="black")
 
         # 5. Город и дата
-        draw_centered(draw, citydate, font_footer, y_footer, x_left, x_right)
+        draw.text((x_footer, y_footer), citydate, font=font_footer, fill="black")
 
         out_stream = io.BytesIO()
         base_image.save(out_stream, format="PNG")
@@ -142,7 +139,6 @@ def get_city_date(update, context):
     except Exception as e:
         update.message.reply_text(f"Ошибка при создании письма: {e}")
 
-    # Вернёмся к стартовому меню
     return start(update, context)
 
 def cancel(update, context):

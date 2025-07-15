@@ -1,8 +1,9 @@
 import logging
 import os
 import io
+import re
 from flask import Flask, request
-from telegram import Bot, Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Bot, Update
 from telegram.ext import (
     Dispatcher,
     CommandHandler,
@@ -10,150 +11,240 @@ from telegram.ext import (
     MessageHandler,
     Filters
 )
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+print("Current working directory:", os.getcwd())
+
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
-TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN') or 'ТВОЙ_ТОКЕН_СЮДА'
+TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+if not TOKEN:
+    raise ValueError("Установи переменную окружения TELEGRAM_BOT_TOKEN")
 bot = Bot(TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
 
-# Пути к файлам
-BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "gratitude.png")
+# Пути к файлам – убедись, что в папке static находятся base_image.png и roboto.ttf
+BASE_IMAGE_PATH = os.path.join(os.getcwd(), "static", "base_image.png")
 FONT_PATH = os.path.join(os.getcwd(), "static", "roboto.ttf")
-BOLD_FONT_PATH = os.path.join(os.getcwd(), "static", "roboto_bold.ttf")
 
-# Состояния
-STATE_GENDER, STATE_FIO, STATE_BODY, STATE_CITYDATE = range(4)
+print("Путь к изображению:", BASE_IMAGE_PATH)
+print("Файл изображения существует?", os.path.exists(BASE_IMAGE_PATH))
+print("Путь к шрифту:", FONT_PATH)
+print("Файл шрифта существует?", os.path.exists(FONT_PATH))
 
-# Новые координаты по сетке
-COORDS = {
-    "gender":  (510, 330),   # «Уважаемый»
-    "name":    (350, 410),   # Имя + Отчество
-    "surname": (300, 470),   # Фамилия
-    "body":    (170, 540),   # Основной текст
-    "footer":  (820, 970)    # Город и дата
-}
+# Состояния диалога
+STATE_DATE_INPUT = 1
+STATE_EXPERT = 2
+STATE_TOPIC = 3
+STATE_PHOTO = 4
 
+# Функция для переноса строки, если текст выходит за пределы max_width
+def wrap_text(text, font, max_width):
+    words = text.split()
+    lines = []
+    current_line = ""
+    for word in words:
+        test_line = f"{current_line} {word}".strip()
+        w, _ = font.getsize(test_line)
+        if w <= max_width:
+            current_line = test_line
+        else:
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    if current_line:
+        lines.append(current_line)
+    return lines
+
+# Функция для разделения даты и времени.
+def split_date_time(dt_text):
+    tokens = dt_text.split()
+    for i, token in enumerate(tokens):
+        if re.search(r'\d{1,2}:\d{2}', token):
+            date_part = " ".join(tokens[:i])
+            time_part = " ".join(tokens[i:])
+            return date_part, time_part
+    return dt_text, ""
+
+# 1. Начало диалога: запрос даты и времени ввода вручную
 def start(update, context):
-    keyboard = [["Создать благ. письмо ФАБА"], ["Создать анонс к Кофе"]]
+    user_first_name = update.message.from_user.first_name
     update.message.reply_text(
-        "Выберите действие:",
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        f"Привет, {user_first_name}! Введи дату и время (например, 14 марта 13:00 МСК):"
     )
-    return STATE_GENDER
+    return STATE_DATE_INPUT
 
-def choose_mode(update, context):
-    text = update.message.text
-    if text == "Создать благ. письмо ФАБА":
-        gender_keyboard = [["Уважаемый"], ["Уважаемая"]]
-        update.message.reply_text(
-            "Выберите обращение:",
-            reply_markup=ReplyKeyboardMarkup(gender_keyboard, resize_keyboard=True)
-        )
-        return STATE_FIO
-    elif text == "Создать анонс к Кофе":
-        update.message.reply_text("Эта функция пока не реализована.")
-        return ConversationHandler.END
+# Получение даты и времени
+def get_date_time(update, context):
+    date_time_text = update.message.text
+    context.user_data["date_time_text"] = date_time_text
+    update.message.reply_text("Напиши фамилию и имя эксперта:")
+    return STATE_EXPERT
 
-def get_gender(update, context):
-    context.user_data["gender"] = update.message.text.strip()
-    update.message.reply_text("Введите ФИО:", reply_markup=ReplyKeyboardRemove())
-    return STATE_BODY
+# 2. Получение ФИО эксперта с автоматическим уменьшением шрифта при превышении ширины
+def get_expert(update, context):
+    expert = update.message.text
+    logging.info(f"Получено имя эксперта: {expert}")
+    context.user_data["expert_text"] = expert
+    update.message.reply_text("Напиши тему эфира:")
+    return STATE_TOPIC
 
-def get_fio(update, context):
-    context.user_data["fio"] = update.message.text.strip()
-    update.message.reply_text("Введите основной текст (выражение благодарности):")
-    return STATE_CITYDATE
-
-def get_body(update, context):
-    context.user_data["body"] = update.message.text.strip()
-    update.message.reply_text("Введите город и дату (например: г. Краснодар, май 2025):")
-    return ConversationHandler.END
-
-def get_citydate(update, context):
-    context.user_data["citydate"] = update.message.text.strip()
+# 3. Получение темы эфира и нанесение текстов на изображение
+def get_topic(update, context):
+    topic = update.message.text
+    context.user_data["topic_text"] = topic
     try:
         base_image = Image.open(BASE_IMAGE_PATH).convert("RGBA")
         draw = ImageDraw.Draw(base_image)
-
-        # Шрифты
-        f_header = ImageFont.truetype(BOLD_FONT_PATH, 36)  # Обращение
-        f_name = ImageFont.truetype(BOLD_FONT_PATH, 40)
-        f_surname = ImageFont.truetype(BOLD_FONT_PATH, 40)
-        f_body = ImageFont.truetype(FONT_PATH, 28)
-        f_footer = ImageFont.truetype(FONT_PATH, 22)
-
-        gender = context.user_data.get("gender", "")
-        fio = context.user_data.get("fio", "")
-        body = context.user_data.get("body", "")
-        citydate = context.user_data.get("citydate", "")
-
-        fio_parts = fio.split()
-        if len(fio_parts) >= 3:
-            name_part = " ".join(fio_parts[:2])
-            surname_part = fio_parts[2]
-        elif len(fio_parts) == 2:
-            name_part, surname_part = fio_parts
-        else:
-            name_part = fio
-            surname_part = ""
-
-        # 1. Обращение
-        draw.text(COORDS["gender"], gender, font=f_header, fill="black")
-        # 2. Имя + Отчество
-        draw.text(COORDS["name"], name_part, font=f_name, fill="black")
-        # 3. Фамилия
-        draw.text(COORDS["surname"], surname_part, font=f_surname, fill="black")
-
-        # 4. Основной текст (с переносом по ширине)
-        def wrap_text(text, font, max_width):
-            words = text.split()
-            lines = []
-            line = ""
-            for word in words:
-                test_line = line + (" " if line else "") + word
-                if font.getsize(test_line)[0] <= max_width:
-                    line = test_line
-                else:
-                    lines.append(line)
-                    line = word
-            if line:
-                lines.append(line)
-            return lines
-
-        body_lines = wrap_text(body, f_body, 950)
-        y_offset = COORDS["body"][1]
-        for line in body_lines:
-            draw.text((COORDS["body"][0], y_offset), line, font=f_body, fill="black")
-            y_offset += f_body.getsize(line)[1] + 6
-
-        # 5. Город и дата
-        draw.text(COORDS["footer"], citydate, font=f_footer, fill="black")
-
-        # Сохраняем и отправляем
-        out_stream = io.BytesIO()
-        base_image.save(out_stream, format="PNG")
-        out_stream.seek(0)
-        update.message.reply_photo(photo=out_stream, caption="Готово!")
-
+        # Определяем шрифты:
+        # Дата/время – размер 45.
+        font_dt = ImageFont.truetype(FONT_PATH, 45)
+        # Для ФИО эксперта – начальный размер 70.
+        expert_font_size = 70
+        font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
+        # Тема эфира – размер 70 (с дальнейшей регулировкой по высоте).
+        topic_font_size = 65
+        font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
+        
+        dt_text = context.user_data.get("date_time_text", "")
+        expert_text = context.user_data.get("expert_text", "")
+        topic_text = context.user_data.get("topic_text", "")
+        
+        # Разбиваем дату и время: отделяем время, если найдено (например, 13:00)
+        dt_date, dt_time = split_date_time(dt_text)
+        y_offset = 20
+        if dt_date:
+            draw.text((20, y_offset), dt_date, font=font_dt, fill="white")
+            y_offset += font_dt.getsize(dt_date)[1] + 5
+        if dt_time:
+            draw.text((20, y_offset), dt_time, font=font_dt, fill="white")
+            y_offset += font_dt.getsize(dt_time)[1] + 5
+        
+        # Уменьшаем шрифт для ФИО эксперта, если текст выходит за пределы x=570 (доступная ширина 550 пикселей)
+        max_expert_width = 550
+        expert_text_width, _ = font_expert.getsize(expert_text)
+        while expert_text_width > max_expert_width and expert_font_size > 30:
+            expert_font_size -= 5
+            font_expert = ImageFont.truetype(FONT_PATH, expert_font_size)
+            expert_text_width, _ = font_expert.getsize(expert_text)
+        # Рисуем ФИО эксперта (фиксированно, например, в точке (20,370))
+        draw.text((20, 370), expert_text, font=font_expert, fill="white")
+        
+        # Рисуем тему эфира с переносом строк, если текст выходит за координату x=570.
+        topic_start_y = 450
+        max_topic_y = 570
+        available_height = max_topic_y - topic_start_y
+        max_width = 550  # доступная ширина от x=20 до x=570
+        
+        topic_lines = wrap_text(topic_text, font_topic, max_width)
+        total_height = sum(font_topic.getsize(line)[1] for line in topic_lines) + (len(topic_lines)-1)*5
+        
+        # Если текст не умещается по высоте, уменьшаем шрифт до тех пор, пока не поместится
+        while total_height > available_height and topic_font_size > 10:
+            topic_font_size -= 5
+            font_topic = ImageFont.truetype(FONT_PATH, topic_font_size)
+            topic_lines = wrap_text(topic_text, font_topic, max_width)
+            total_height = sum(font_topic.getsize(line)[1] for line in topic_lines) + (len(topic_lines)-1)*5
+        
+        y_offset_topic = topic_start_y
+        for line in topic_lines:
+            draw.text((20, y_offset_topic), line, font=font_topic, fill="white")
+            y_offset_topic += font_topic.getsize(line)[1] + 5
+        
+        context.user_data["final_image"] = base_image.copy()
+        
+        update.message.reply_text(
+            "Тексты нанесены. Теперь отправь фото эксперта, "
+            "или введи /skip, чтобы использовать только изображение с текстами."
+        )
+        return STATE_PHOTO
     except Exception as e:
-        logging.exception("Ошибка при создании письма")
-        update.message.reply_text(f"Ошибка при создании письма: {e}")
+        update.message.reply_text(f"Ошибка при обработке изображения: {e}")
+        return ConversationHandler.END
 
-    return start(update, context)
+# 4. Получение фото: обрезка по кругу и вставка в заданную область с прозрачным фоном,
+# при этом картинку пользователя подгоняем с сохранением пропорций.
+def get_photo(update, context):
+    try:
+        if update.message.photo:
+            photo_file = update.message.photo[-1].get_file()
+            photo_stream = io.BytesIO()
+            photo_file.download(out=photo_stream)
+            photo_stream.seek(0)
+            user_photo = Image.open(photo_stream).convert("RGBA")
+            
+            final_image = context.user_data.get("final_image")
+            if not final_image:
+                update.message.reply_text("Изображение с текстами не найдено.")
+                return ConversationHandler.END
+            
+            final_image = final_image.convert("RGBA")
+            
+            circle_diameter = 470
+            # Используем ImageOps.fit для обрезки фото по кругу,
+            # смещая область обрезки вверх с помощью параметра centering=(0.5, 0.3)
+            user_photo = ImageOps.fit(user_photo, (circle_diameter, circle_diameter), method=Image.ANTIALIAS, centering=(0.5, 0.3))
+            
+            # Создаём маску для круглой обрезки
+            mask = Image.new("L", (circle_diameter, circle_diameter), 0)
+            mask_draw = ImageDraw.Draw(mask)
+            mask_draw.ellipse((0, 0, circle_diameter, circle_diameter), fill=255)
+            user_photo.putalpha(mask)
+            
+            base_w, base_h = final_image.size
+            x_pos = base_w - circle_diameter - 23
+            y_pos = 224
+            
+            # Создаём временный слой с прозрачным фоном и вставляем на него фото
+            temp_layer = Image.new("RGBA", (circle_diameter, circle_diameter), (0, 0, 0, 0))
+            temp_layer.paste(user_photo, (0, 0), user_photo)
+            final_image.alpha_composite(temp_layer, (x_pos, y_pos))
+            
+            final_image_rgb = final_image.convert("RGB")
+            out_stream = io.BytesIO()
+            final_image_rgb.save(out_stream, format="JPEG")
+            out_stream.seek(0)
+            
+            update.message.reply_photo(photo=out_stream, caption="Анонс к Кофе с Платинум готов! Для создания нового, нажми на /start")
+            
+            try:
+                bot.delete_message(chat_id=update.message.chat_id, message_id=update.message.message_id)
+            except Exception as del_err:
+                logging.error(f"Ошибка при удалении сообщения: {del_err}")
+        else:
+            update.message.reply_text("Пожалуйста, отправь изображение.")
+            return STATE_PHOTO
+    except Exception as e:
+        update.message.reply_text(f"Ошибка при обработке изображения: {e}")
+    return ConversationHandler.END
+
+def skip_photo(update, context):
+    final_image = context.user_data.get("final_image")
+    if final_image:
+        final_image_rgb = final_image.convert("RGB")
+        out_stream = io.BytesIO()
+        final_image_rgb.save(out_stream, format="JPEG")
+        out_stream.seek(0)
+        update.message.reply_photo(photo=out_stream, caption="Вот итоговое изображение без дополнительного фото! Для создания нового, нажми на /start")
+    else:
+        update.message.reply_text("Изображение не найдено.")
+    return ConversationHandler.END
 
 def cancel(update, context):
-    update.message.reply_text("Отмена.", reply_markup=ReplyKeyboardRemove())
+    update.message.reply_text("Отмена.")
     return ConversationHandler.END
 
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start)],
     states={
-        STATE_GENDER: [MessageHandler(Filters.text & ~Filters.command, choose_mode)],
-        STATE_FIO: [MessageHandler(Filters.text & ~Filters.command, get_gender)],
-        STATE_BODY: [MessageHandler(Filters.text & ~Filters.command, get_fio)],
-        STATE_CITYDATE: [MessageHandler(Filters.text & ~Filters.command, get_body)],
-        ConversationHandler.END: [MessageHandler(Filters.text & ~Filters.command, get_citydate)]
+        STATE_DATE_INPUT: [MessageHandler(Filters.text & ~Filters.command, get_date_time)],
+        STATE_EXPERT: [MessageHandler(Filters.text & ~Filters.command, get_expert)],
+        STATE_TOPIC: [MessageHandler(Filters.text & ~Filters.command, get_topic)],
+        STATE_PHOTO: [
+            MessageHandler(Filters.photo, get_photo),
+            CommandHandler('skip', skip_photo)
+        ]
     },
     fallbacks=[CommandHandler('cancel', cancel)],
     allow_reentry=True
@@ -164,6 +255,7 @@ dispatcher.add_handler(conv_handler)
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json(force=True)
+    logging.info(f"Получен апдейт: {data}")
     update = Update.de_json(data, bot)
     dispatcher.process_update(update)
     return "ok", 200
@@ -175,3 +267,6 @@ def index():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
+
+# Для некоторых хостингов может потребоваться:
+application = app

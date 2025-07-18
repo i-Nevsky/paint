@@ -252,6 +252,10 @@ conv_handler = ConversationHandler(
 
 dispatcher.add_handler(conv_handler)
 
+@app.route('/ping')
+def ping():
+    return 'pong'
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json(force=True)
